@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Upload, Loader2 } from 'lucide-react';
+import { Save, Upload, Loader2, QrCode } from 'lucide-react';
 import { LogoUploader } from './LogoUploader';
 import { useUiSettings } from '../hooks/useUiSettings';
 
@@ -8,6 +8,7 @@ export function SettingsManager() {
   const [bandName, setBandName] = useState(settings?.band_name || 'uRequest Live');
   const [primaryColor, setPrimaryColor] = useState(settings?.primary_color || '#ff00ff');
   const [secondaryColor, setSecondaryColor] = useState(settings?.secondary_color || '#9d00ff');
+  const [showQrCode, setShowQrCode] = useState(settings?.show_qr_code || false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -18,6 +19,7 @@ export function SettingsManager() {
       setBandName(settings.band_name || 'uRequest Live');
       setPrimaryColor(settings.primary_color || '#ff00ff');
       setSecondaryColor(settings.secondary_color || '#9d00ff');
+      setShowQrCode(settings.show_qr_code || false);
     }
   }, [settings]);
 
@@ -51,6 +53,7 @@ export function SettingsManager() {
         band_name: bandName.trim(),
         primary_color: primaryColor,
         secondary_color: secondaryColor,
+        show_qr_code: showQrCode,
         // Force timestamp update to ensure changes are picked up
         updated_at: new Date().toISOString()
       });
@@ -150,6 +153,41 @@ export function SettingsManager() {
               Used for background gradients and secondary elements
             </p>
           </div>
+        </div>
+
+        <div className="border-t border-gray-700 pt-4">
+          <h4 className="text-md font-medium text-white mb-3 flex items-center">
+            <QrCode className="w-4 h-4 mr-2" />
+            Kiosk Settings
+          </h4>
+          
+          <div className="flex items-center space-x-2">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showQrCode}
+                onChange={(e) => setShowQrCode(e.target.checked)}
+                className="sr-only"
+              />
+              <div className={`relative inline-block w-10 h-5 rounded-full transition-colors ${showQrCode ? 'bg-neon-pink' : 'bg-gray-600'}`}>
+                <span 
+                  className={`inline-block w-4 h-4 transform transition-transform bg-white rounded-full ${
+                    showQrCode ? 'translate-x-6' : 'translate-x-1'
+                  }`} 
+                  style={{ 
+                    top: '0.125rem',
+                    position: 'relative'
+                  }}
+                />
+              </div>
+              <span className="ml-2 text-sm text-white">
+                Show QR Code in Kiosk Mode
+              </span>
+            </label>
+          </div>
+          <p className="text-xs text-gray-400 mt-1 ml-12">
+            When enabled, displays a QR code in the top corner of the kiosk view that links to your request page
+          </p>
         </div>
         
         <div className="flex justify-end">

@@ -15,6 +15,7 @@ interface UiSettings {
   nav_bg_color?: string;
   highlight_color?: string;
   customMessage?: string;
+  show_qr_code?: boolean;
 }
 
 // Default logo URL from Fusion Events 
@@ -33,7 +34,8 @@ const DEFAULT_SETTINGS: Omit<UiSettings, 'id'> = {
   song_border_color: '#ff00ff',
   nav_bg_color: '#0f051d',
   highlight_color: '#ff00ff',
-  customMessage: ''
+  customMessage: '',
+  show_qr_code: false
 };
 
 export function useUiSettings() {

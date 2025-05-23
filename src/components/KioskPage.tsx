@@ -7,6 +7,7 @@ import { Ticker } from './Ticker';
 import { LoadingSpinner } from './shared/LoadingSpinner';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import { UpvoteList } from './UpvoteList';
+import { QRCode } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import type { Song, SongRequest } from '../types';
 
@@ -197,14 +198,33 @@ export function KioskPage({
     }
   }, [error]);
 
+  // Get current URL for QR code
+  const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
   return (
     <ErrorBoundary>
       <div className="frontend-container min-h-screen flex flex-col">
         {/* Header with logo and band name */}
         <header 
-          className="px-6 pt-6 pb-4 text-center"
+          className="px-6 pt-10 pb-4 text-center relative"
           style={{ backgroundColor: headerBgColor }}
         >
+          {settings?.show_qr_code && (
+            <div className="absolute right-4 top-4 p-2 bg-white rounded-lg shadow-md">
+              <QRCode 
+                value={currentUrl} 
+                size={100} 
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="L"
+                includeMargin={false}
+              />
+              <div className="text-black text-xs mt-1 text-center font-medium">
+                Scan to Request
+              </div>
+            </div>
+          )}
+          
           <Logo 
             url={logoUrl}
             className="h-24 mx-auto mb-6"
