@@ -19,7 +19,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   realtime: {
     params: {
-      eventsPerSecond: 5, // Reduce from the default to avoid rate limits
+      eventsPerSecond: 5,
     },
   },
 });
@@ -31,15 +31,48 @@ export function handleSupabaseError(error: any): never {
   throw new Error(errorMessage);
 }
 
-// Execute a database operation with basic error handling
+// Execute a database operation with proper error handling
 export async function executeDbOperation<T>(
   operationKey: string,
   operation: () => Promise<T>
 ): Promise<T> {
   try {
     return await operation();
-  } catch (error) {
-    console.error(`DB operation "${operationKey}" failed:`, error);
+  } catch (error: any) {
+    // Handle AbortError silently - this is expected when component unmounts
+    if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+      console.log(`Request aborted for ${operationKey}`);
+      return { data: null, error: null } as T;
+    }
+
+    // Handle component unmount silently
+    if (error.message?.includes('Component unmounted')) {
+      console.log(`Operation cancelled - component unmounted: ${operationKey}`);
+      return { data: null, error: null } as T;
+    }
+
+    // Handle timeout errors
+    if (error.message?.includes('timeout') || error.name === 'TimeoutError') {
+      console.error(`Operation timed out: ${operationKey}`);
+      throw new Error(`Operation timed out: ${operationKey}`);
+    }
+
+    // Handle network errors
+    if (error.message?.includes('network') || error.name === 'NetworkError' || !navigator.onLine) {
+      console.error(`Network error during operation: ${operationKey}`);
+      throw new Error(`Network error: ${error.message || 'Failed to connect to server'}`);
+    }
+
+    // Log the error with context
+    console.error(`DB operation "${operationKey}" failed:`, {
+      error,
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      context: operationKey
+    });
+
+    // Throw a properly formatted error
     if (error instanceof Error) {
       throw error;
     } else {
