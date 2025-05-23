@@ -139,7 +139,8 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
                   created_at
                 )
               `)
-              .order('created_at', { ascending: false });
+              .order('created_at', { ascending: false })
+              .abortSignal(signal);
 
             if (requestsError) throw requestsError;
 
@@ -230,26 +231,31 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         },
       });
 
+      // Keep track of event handlers to avoid issues with callback references
+      const requestChangeHandler = async (payload: any) => {
+        if (mountedRef.current && isSubscribed) {
+          console.log('Received request change:', payload.eventType);
+          await fetchRequests(true);
+        }
+      };
+
+      const requesterChangeHandler = async (payload: any) => {
+        if (mountedRef.current && isSubscribed) {
+          console.log('Received requester change:', payload.eventType);
+          await fetchRequests(true);
+        }
+      };
+
       newChannel
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'requests' },
-          async (payload) => {
-            if (mountedRef.current && isSubscribed) {
-              console.log('Received request change:', payload.eventType);
-              await fetchRequests(true);
-            }
-          }
+          requestChangeHandler
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'requesters' },
-          async (payload) => {
-            if (mountedRef.current && isSubscribed) {
-              console.log('Received requester change:', payload.eventType);
-              await fetchRequests(true);
-            }
-          }
+          requesterChangeHandler
         )
         .on('error', (err) => {
           console.error('Channel error:', err);

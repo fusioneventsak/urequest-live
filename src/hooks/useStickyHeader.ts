@@ -16,34 +16,51 @@ export function useStickyHeader(headerHeight: number, threshold = 50) {
   const contentRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      
-      // Determine if we're scrolling up or down
-      const isScrollingDown = currentScrollY > lastScrollY.current;
-      setIsScrollingUp(!isScrollingDown);
+    // We add an option to prevent race conditions with events
+    let isUpdating = false;
 
-      // Set hasScrolled to true once user has scrolled past threshold
-      if (!hasScrolled && currentScrollY > threshold) {
-        setHasScrolled(true);
-      }
+    const handleScroll = () => {
+      // Avoid multiple rapid updates
+      if (isUpdating) return;
       
-      // Hide header when scrolling down past threshold
-      if (isScrollingDown && currentScrollY > threshold) {
-        setIsHeaderVisible(false);
-      } 
-      // Show header when scrolling up
-      else if (!isScrollingDown) {
-        setIsHeaderVisible(true);
-        
-        // Reset hasScrolled when we scroll back to top
-        if (currentScrollY === 0) {
-          setHasScrolled(false);
+      isUpdating = true;
+      
+      // Use requestAnimationFrame for better performance
+      window.requestAnimationFrame(() => {
+        try {
+          const currentScrollY = window.scrollY;
+          
+          // Determine if we're scrolling up or down
+          const isScrollingDown = currentScrollY > lastScrollY.current;
+          setIsScrollingUp(!isScrollingDown);
+  
+          // Set hasScrolled to true once user has scrolled past threshold
+          if (!hasScrolled && currentScrollY > threshold) {
+            setHasScrolled(true);
+          }
+          
+          // Hide header when scrolling down past threshold
+          if (isScrollingDown && currentScrollY > threshold) {
+            setIsHeaderVisible(false);
+          } 
+          // Show header when scrolling up
+          else if (!isScrollingDown) {
+            setIsHeaderVisible(true);
+            
+            // Reset hasScrolled when we scroll back to top
+            if (currentScrollY === 0) {
+              setHasScrolled(false);
+            }
+          }
+          
+          // Remember last scroll position
+          lastScrollY.current = currentScrollY;
+        } catch (err) {
+          console.error('Error in scroll handler:', err);
+        } finally {
+          isUpdating = false;
         }
-      }
-      
-      // Remember last scroll position
-      lastScrollY.current = currentScrollY;
+      });
     };
     
     window.addEventListener('scroll', handleScroll, { passive: true });
