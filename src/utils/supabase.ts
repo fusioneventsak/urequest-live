@@ -34,9 +34,34 @@ export function handleSupabaseError(error: any): never {
 // Execute a database operation with proper error handling
 export async function executeDbOperation<T>(
   operationKey: string,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  signal?: AbortSignal
 ): Promise<T> {
   try {
+    // Check network status first
+    if (!navigator.onLine) {
+      throw new Error('No network connection available');
+    }
+
+    // Add abort signal to operation context if provided
+    if (signal) {
+      // Check if already aborted
+      if (signal.aborted) {
+        throw new Error('Operation aborted');
+      }
+
+      // Create timeout for operation
+      const timeout = setTimeout(() => {
+        throw new Error('Operation timed out');
+      }, 30000); // 30 second timeout
+
+      try {
+        return await operation();
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
     return await operation();
   } catch (error: any) {
     // Handle AbortError silently - this is expected when component unmounts
