@@ -57,7 +57,9 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         console.warn('Error cleaning up channel:', err);
       } finally {
         channelRef.current = null;
-        setIsSubscribed(false);
+        if (mountedRef.current) {
+          setIsSubscribed(false);
+        }
       }
     }
   }, []);
@@ -221,16 +223,9 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         },
       });
 
-      const requestChangeHandler = async () => {
+      const handleChange = async () => {
         if (mountedRef.current && isSubscribed) {
-          console.log('Received request change');
-          await fetchRequests(true);
-        }
-      };
-
-      const requesterChangeHandler = async () => {
-        if (mountedRef.current && isSubscribed) {
-          console.log('Received requester change');
+          console.log('Received database change');
           await fetchRequests(true);
         }
       };
@@ -239,12 +234,12 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'requests' },
-          requestChangeHandler
+          handleChange
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'requesters' },
-          requesterChangeHandler
+          handleChange
         )
         .on('error', (err) => {
           console.error('Channel error:', err);
@@ -317,9 +312,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
                   setupRealtimeSubscription();
                 }
               }, delay);
-            } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
-              const errorMessage = `Maximum retry attempts reached. Last error: ${lastErrorRef.current}`;
-              setError(new Error(errorMessage));
             }
           }
         });
