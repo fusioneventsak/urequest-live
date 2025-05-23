@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Music4, Search, AlertTriangle, Send } from 'lucide-react';
+import { Music4, Search, AlertTriangle, Send, ThumbsUp, Music } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { useUiSettings } from '../hooks/useUiSettings';
 import { Logo } from './shared/Logo';
 import { Ticker } from './Ticker';
 import { LoadingSpinner } from './shared/LoadingSpinner';
 import { ErrorBoundary } from './shared/ErrorBoundary';
+import { UpvoteList } from './UpvoteList';
 import toast from 'react-hot-toast';
 import type { Song, SongRequest } from '../types';
 
@@ -34,12 +35,15 @@ export function KioskPage({
   const [requestMessage, setRequestMessage] = useState('');
   const [requestName, setRequestName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'requests' | 'upvote'>('requests');
   const { settings } = useUiSettings();
 
   // Get colors from settings
   const headerBgColor = settings?.frontend_header_bg || '#13091f';
   const accentColor = settings?.frontend_accent_color || '#ff00ff';
   const songBorderColor = settings?.song_border_color || settings?.frontend_accent_color || '#ff00ff';
+  const navBgColor = settings?.nav_bg_color || '#0f051d';
+  const highlightColor = settings?.highlight_color || '#ff00ff';
 
   // Get the locked request for the ticker
   const lockedRequest = useMemo(() => {
@@ -125,6 +129,7 @@ export function KioskPage({
         toast.success('Your request has been added to the queue!');
         setRequestMessage(''); // Clear the message field after successful submission
         setRequestName(''); // Clear the name field after successful submission
+        setSelectedSong(null);
       } else {
         throw new Error('Failed to submit request');
       }
@@ -145,7 +150,39 @@ export function KioskPage({
       setError(errorMessage);
     } finally {
       setIsSubmitting(false);
-      setSelectedSong(null);
+    }
+  };
+
+  // Handle upvoting
+  const handleVote = async (requestId: string) => {
+    try {
+      setIsSubmitting(true);
+
+      // Directly increment votes in database without validation
+      // since kiosk mode doesn't track voters
+      const { data, error: getError } = await supabase
+        .from('requests')
+        .select('votes')
+        .eq('id', requestId)
+        .single();
+        
+      if (getError) throw getError;
+      
+      // Update votes count
+      const currentVotes = data?.votes || 0;
+      const { error: updateError } = await supabase
+        .from('requests')
+        .update({ votes: currentVotes + 1 })
+        .eq('id', requestId);
+        
+      if (updateError) throw updateError;
+        
+      toast.success('Vote added!');
+    } catch (error) {
+      console.error('Error voting for request:', error);
+      toast.error('Failed to vote for this request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -162,7 +199,7 @@ export function KioskPage({
 
   return (
     <ErrorBoundary>
-      <div className="frontend-container min-h-screen max-h-screen overflow-hidden flex flex-col">
+      <div className="frontend-container min-h-screen flex flex-col">
         {/* Header with logo and band name */}
         <header 
           className="px-6 pt-6 pb-4 text-center"
@@ -213,96 +250,225 @@ export function KioskPage({
             </div>
           )}
 
-          {/* Search bar */}
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search songs by title, artist, or genre..."
-              className="w-full pl-10 pr-4 py-3 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
-            />
-          </div>
+          {activeTab === 'requests' && (
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search songs by title, artist, or genre..."
+                className="w-full pl-10 pr-4 py-3 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+              />
+            </div>
+          )}
         </div>
 
-        {/* Song list */}
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
-          {isSubmitting ? (
+        {/* Song list or upvote list */}
+        <div className="flex-1 overflow-y-auto px-6 pb-24">
+          {isSubmitting && !selectedSong ? (
             <div className="flex items-center justify-center h-full">
-              <LoadingSpinner size="lg" message="Submitting request..." />
+              <LoadingSpinner size="lg" message="Processing..." />
             </div>
-          ) : filteredSongs.length > 0 ? (
-            <div className="space-y-3">
-              {filteredSongs.map((song) => (
-                <div 
-                  key={song.id}
-                  className="glass-effect rounded-lg p-4 flex items-center gap-3 cursor-pointer transition-all duration-300"
-                  style={{
-                    borderColor: songBorderColor,
-                    borderWidth: '1px',
-                    boxShadow: `0 0 8px ${songBorderColor}30`,
-                  }}
-                  onClick={() => setSelectedSong(song)}
-                >
-                  {song.albumArtUrl ? (
-                    <img
-                      src={song.albumArtUrl}
-                      alt={`${song.title} album art`}
-                      className="w-16 h-16 object-cover rounded-md"
-                      style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        const container = e.currentTarget.parentElement;
-                        if (container) {
-                          const fallback = document.createElement('div');
-                          fallback.className = "w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20";
-                          fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
-                          container.prepend(fallback);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20">
-                      <Music4 
-                        className="w-8 h-8" 
-                        style={{ color: accentColor }}
+          ) : activeTab === 'requests' ? (
+            filteredSongs.length > 0 ? (
+              <div className="space-y-3">
+                {filteredSongs.map((song) => (
+                  <div 
+                    key={song.id}
+                    className="glass-effect rounded-lg p-4 flex items-center gap-3 transition-all duration-300"
+                    style={{
+                      borderColor: songBorderColor,
+                      borderWidth: '1px',
+                      boxShadow: `0 0 8px ${songBorderColor}30`,
+                    }}
+                  >
+                    {song.albumArtUrl ? (
+                      <img
+                        src={song.albumArtUrl}
+                        alt={`${song.title} album art`}
+                        className="w-16 h-16 object-cover rounded-md"
+                        style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const container = e.currentTarget.parentElement;
+                          if (container) {
+                            const fallback = document.createElement('div');
+                            fallback.className = "w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20";
+                            fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
+                            container.prepend(fallback);
+                          }
+                        }}
                       />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
-                    <p className="text-gray-300 text-base truncate">{song.artist}</p>
-                    {song.genre && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {song.genre.split(',').map((genre, i) => (
-                          <span 
-                            key={i} 
-                            className="px-2 py-0.5 text-xs rounded-full truncate"
-                            style={{
-                              backgroundColor: `${accentColor}20`,
-                              color: accentColor,
-                            }}
-                          >
-                            {genre.trim()}
-                          </span>
-                        ))}
+                    ) : (
+                      <div className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20">
+                        <Music4 
+                          className="w-8 h-8" 
+                          style={{ color: accentColor }}
+                        />
                       </div>
                     )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
+                      <p className="text-gray-300 text-base truncate">{song.artist}</p>
+                      {song.genre && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {song.genre.split(',').slice(0, 2).map((genre, i) => (
+                            <span 
+                              key={i} 
+                              className="px-2 py-0.5 text-xs rounded-full truncate"
+                              style={{
+                                backgroundColor: `${accentColor}20`,
+                                color: accentColor,
+                              }}
+                            >
+                              {genre.trim()}
+                            </span>
+                          ))}
+                          {song.genre.split(',').length > 2 && (
+                            <span className="text-xs text-gray-400">
+                              +{song.genre.split(',').length - 2}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setSelectedSong(song)}
+                      className="px-3 py-1.5 rounded-lg text-white transition-colors whitespace-nowrap text-sm font-extrabold tracking-wide uppercase"
+                      style={{
+                        backgroundColor: accentColor,
+                      }}
+                    >
+                      REQUEST
+                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center p-8 text-gray-400">
+                {searchTerm ? (
+                  <>No songs found matching "<span className="text-white">{searchTerm}</span>"</>
+                ) : (
+                  <>No songs available to request</>
+                )}
+              </div>
+            )
           ) : (
-            <div className="text-center p-8 text-gray-400">
-              {searchTerm ? (
-                <>No songs found matching "<span className="text-white">{searchTerm}</span>"</>
+            // Upvote list tab content
+            <div className="space-y-3">
+              {requests.filter(r => !r.isPlayed).length > 0 ? (
+                requests
+                  .filter(r => !r.isPlayed)
+                  .sort((a, b) => (b.votes || 0) - (a.votes || 0))
+                  .map((request) => (
+                    <div
+                      key={request.id}
+                      className="glass-effect rounded-lg p-4 relative overflow-hidden transition-all duration-300 flex items-center"
+                      style={{
+                        borderColor: songBorderColor,
+                        borderWidth: '1px',
+                        boxShadow: `0 0 8px ${songBorderColor}50`,
+                      }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-white text-lg truncate">
+                          {request.title}
+                        </h3>
+                        {request.artist && (
+                          <p className="text-gray-300 text-sm truncate mb-2">{request.artist}</p>
+                        )}
+                        
+                        {/* Requesters section */}
+                        {request.requesters && request.requesters.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            {request.requesters.slice(0, 3).map((requester, index) => (
+                              <div 
+                                key={`${requester.id}-${index}`}
+                                className="flex-shrink-0"
+                                title={requester.name}
+                              >
+                                <img
+                                  src={requester.photo}
+                                  alt={requester.name}
+                                  className="w-6 h-6 rounded-full border"
+                                  style={{ borderColor: accentColor }}
+                                  onError={(e) => {
+                                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
+                                  }}
+                                />
+                              </div>
+                            ))}
+                            {request.requesters.length > 3 && (
+                              <span className="text-xs text-gray-400">
+                                +{request.requesters.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-2">
+                        <div 
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: `${accentColor}20` }}
+                        >
+                          <span className="text-xs" style={{ color: accentColor }}>
+                            {request.votes || 0}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleVote(request.id)}
+                          disabled={isSubmitting}
+                          className={`px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1 font-semibold flex-shrink-0 text-white text-xs ${
+                            isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                          style={{ 
+                            backgroundColor: accentColor,
+                            border: `1px solid ${accentColor}`,
+                          }}
+                          title="Upvote this request"
+                        >
+                          <ThumbsUp className="w-3 h-3" />
+                          <span>UPVOTE</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
               ) : (
-                <>No songs available to request</>
+                <div className="text-center py-8 text-gray-400">
+                  No active requests to vote on
+                </div>
               )}
             </div>
           )}
         </div>
+
+        {/* Bottom navigation */}
+        <nav 
+          className="fixed bottom-0 left-0 right-0 border-t border-neon-purple/20"
+          style={{ backgroundColor: navBgColor }}
+        >
+          <div className="max-w-7xl mx-auto px-4 flex justify-between">
+            <button
+              onClick={() => setActiveTab('requests')}
+              className="flex-1 py-4 flex flex-col items-center space-y-1"
+              style={{ color: activeTab === 'requests' ? highlightColor : 'rgb(156 163 175)' }}
+            >
+              <Music className="w-6 h-6" />
+              <span className="text-sm">Requests</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('upvote')}
+              className="flex-1 py-4 flex flex-col items-center space-y-1"
+              style={{ color: activeTab === 'upvote' ? highlightColor : 'rgb(156 163 175)' }}
+            >
+              <ThumbsUp className="w-6 h-6" />
+              <span className="text-sm">Upvote</span>
+            </button>
+          </div>
+        </nav>
 
         {/* Request modal */}
         {selectedSong && (
