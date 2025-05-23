@@ -1,8 +1,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase, executeDbOperation } from '../utils/supabase';
 import { cacheService } from '../utils/cache';
-import { executeWithCircuitBreaker, resetCircuitBreaker } from '../utils/circuitBreaker';
-import { nanoid } from 'nanoid';
+import { executeWithCircuitBreaker } from '../utils/circuitBreaker';
 import type { SongRequest } from '../types';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
@@ -27,7 +26,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout>();
   const healthCheckRef = useRef<NodeJS.Timeout>();
-  const channelIdRef = useRef<string>(nanoid());
+  const channelIdRef = useRef<string>(crypto.randomUUID());
   const lastFetchRef = useRef<number>(0);
   const lastErrorRef = useRef<string>('');
   const fetchPromiseRef = useRef<Promise<void> | null>(null);
@@ -110,6 +109,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
 
     const fetchPromise = (async () => {
       try {
+        if (!mountedRef.current) return;
         setIsLoading(true);
         setError(null);
 
@@ -117,8 +117,10 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
           if (cachedRequests?.length > 0) {
             console.log('Using cached requests');
-            onUpdate(cachedRequests);
-            setIsLoading(false);
+            if (mountedRef.current) {
+              onUpdate(cachedRequests);
+              setIsLoading(false);
+            }
             return;
           }
         }
@@ -146,7 +148,9 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
 
             if (!requestsData) {
               console.log('No requests found');
-              onUpdate([]);
+              if (mountedRef.current) {
+                onUpdate([]);
+              }
               return;
             }
 
@@ -182,22 +186,24 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           return;
         }
 
-        console.error('Error fetching requests:', error);
-        setError(error instanceof Error ? error : new Error(String(error)));
-        setConsecutiveFailures(prev => prev + 1);
+        if (mountedRef.current) {
+          console.error('Error fetching requests:', error);
+          setError(error instanceof Error ? error : new Error(String(error)));
+          setConsecutiveFailures(prev => prev + 1);
 
-        const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
-        if (cachedRequests) {
-          console.warn('Using stale cache due to fetch error');
-          onUpdate(cachedRequests);
-        }
+          const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
+          if (cachedRequests) {
+            console.warn('Using stale cache due to fetch error');
+            onUpdate(cachedRequests);
+          }
 
-        if (consecutiveFailures >= RECONNECT_THRESHOLD) {
-          console.log('Too many consecutive failures, forcing reconnect...');
-          await cleanupChannel();
-          channelIdRef.current = nanoid();
-          setRetryCount(0);
-          setConsecutiveFailures(0);
+          if (consecutiveFailures >= RECONNECT_THRESHOLD) {
+            console.log('Too many consecutive failures, forcing reconnect...');
+            await cleanupChannel();
+            channelIdRef.current = crypto.randomUUID();
+            setRetryCount(0);
+            setConsecutiveFailures(0);
+          }
         }
       } finally {
         clearTimeout(timeoutId);
@@ -266,8 +272,8 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         })
         .on('disconnect', (event) => {
           console.log('Channel disconnected:', event);
-          setIsSubscribed(false);
-          if (mountedRef.current && isOnline) {
+          if (mountedRef.current) {
+            setIsSubscribed(false);
             // Auto-reconnect with backoff
             const delay = Math.min(
               INITIAL_RETRY_DELAY * Math.pow(1.5, retryCount),
@@ -281,7 +287,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
             retryTimeoutRef.current = setTimeout(() => {
               if (mountedRef.current) {
                 setRetryCount(prev => prev + 1);
-                channelIdRef.current = nanoid();
+                channelIdRef.current = crypto.randomUUID();
                 setupRealtimeSubscription();
               }
             }, delay);
@@ -326,7 +332,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
               retryTimeoutRef.current = setTimeout(() => {
                 if (mountedRef.current) {
                   setRetryCount(prev => prev + 1);
-                  channelIdRef.current = nanoid();
+                  channelIdRef.current = crypto.randomUUID();
                   setupRealtimeSubscription();
                 }
               }, delay);
@@ -338,30 +344,32 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         });
     } catch (error) {
       console.error('Error in setupRealtimeSubscription:', error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      setIsSubscribed(false);
-      
-      // Schedule retry with exponential backoff
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-      
-      if (retryCount < MAX_RETRY_ATTEMPTS && mountedRef.current) {
-        const backoff = Math.min(
-          INITIAL_RETRY_DELAY * Math.pow(2, retryCount),
-          MAX_BACKOFF_DELAY
-        );
-        const jitter = Math.floor(Math.random() * JITTER_MAX);
-        const delay = backoff + jitter;
+      if (mountedRef.current) {
+        setError(error instanceof Error ? error : new Error(String(error)));
+        setIsSubscribed(false);
         
-        console.log(`Scheduling reconnect in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+        // Schedule retry with exponential backoff
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+        }
         
-        retryTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current) {
-            setRetryCount(prev => prev + 1);
-            setupRealtimeSubscription();
-          }
-        }, delay);
+        if (retryCount < MAX_RETRY_ATTEMPTS && mountedRef.current) {
+          const backoff = Math.min(
+            INITIAL_RETRY_DELAY * Math.pow(2, retryCount),
+            MAX_BACKOFF_DELAY
+          );
+          const jitter = Math.floor(Math.random() * JITTER_MAX);
+          const delay = backoff + jitter;
+          
+          console.log(`Scheduling reconnect in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+          
+          retryTimeoutRef.current = setTimeout(() => {
+            if (mountedRef.current) {
+              setRetryCount(prev => prev + 1);
+              setupRealtimeSubscription();
+            }
+          }, delay);
+        }
       }
     }
   }, [cleanupChannel, fetchRequests, isSubscribed, retryCount, isOnline]);
@@ -399,7 +407,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   // Initialize subscription and set up health checks
   useEffect(() => {
     mountedRef.current = true;
-    channelIdRef.current = nanoid();
+    channelIdRef.current = crypto.randomUUID();
 
     // Initial fetch before subscription setup
     const initFetch = async () => {
@@ -473,7 +481,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       resetCircuitBreaker(REQUESTS_SERVICE_KEY);
       setRetryCount(0);
       setConsecutiveFailures(0);
-      channelIdRef.current = nanoid();
+      channelIdRef.current = crypto.randomUUID();
       setupRealtimeSubscription();
       fetchRequests(true).catch(console.error);
     }).catch(console.error);
