@@ -4,14 +4,16 @@ import { cacheService } from '../utils/cache';
 import { executeWithCircuitBreaker, resetCircuitBreaker } from '../utils/circuitBreaker';
 import { nanoid } from 'nanoid';
 import type { SongRequest } from '../types';
+import { backOff } from 'exponential-backoff';
+import retry from 'retry';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
 const REQUESTS_SERVICE_KEY = 'requests';
 const MAX_RETRY_ATTEMPTS = 15;
 const INITIAL_RETRY_DELAY = 2000;
-const SUBSCRIPTION_INIT_DELAY = 5000; // Increased to 5 seconds
+const SUBSCRIPTION_INIT_DELAY = 5000; // 5 seconds
 const MAX_BACKOFF_DELAY = 60000;
-const HEALTH_CHECK_INTERVAL = 30000; // Set to 30 seconds
+const HEALTH_CHECK_INTERVAL = 20000; // 20 seconds
 const RECONNECT_THRESHOLD = 3;
 const JITTER_MAX = 1000;
 const FETCH_TIMEOUT = 30000; // 30 second timeout for fetch operations
@@ -33,6 +35,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const fetchPromiseRef = useRef<Promise<void> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fetchInProgressRef = useRef<boolean>(false);
+  const subscribedRef = useRef<boolean>(false); // Track subscription state
 
   // Use this function to safely create a new AbortController
   // and clean up any existing one first
@@ -65,6 +68,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       } finally {
         channelRef.current = null;
         setIsSubscribed(false);
+        subscribedRef.current = false;
       }
     }
   }, []);
@@ -85,11 +89,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       return;
     }
     
-    // If a fetch is already in progress, return that promise
-    if (fetchPromiseRef.current) {
-      return fetchPromiseRef.current;
-    }
-
     fetchInProgressRef.current = true;
     lastFetchRef.current = now;
 
@@ -258,22 +257,30 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           broadcast: { self: true },
           presence: { key: channelId },
           retryAfter: INITIAL_RETRY_DELAY,
-          timeout: 30000 // Increased timeout to 30 seconds
+          timeout: 30000 // 30 seconds
         },
       });
 
       // Keep track of event handlers to avoid issues with callback references
       const requestChangeHandler = async (payload: any) => {
-        if (mountedRef.current && isSubscribed) {
-          console.log('Received request change:', payload.eventType);
-          await fetchRequests(true);
+        console.log('Received request change:', payload.eventType);
+        if (mountedRef.current && subscribedRef.current) {
+          try {
+            await fetchRequests(true);
+          } catch (err) {
+            console.error('Error handling request change:', err);
+          }
         }
       };
 
       const requesterChangeHandler = async (payload: any) => {
-        if (mountedRef.current && isSubscribed) {
-          console.log('Received requester change:', payload.eventType);
-          await fetchRequests(true);
+        console.log('Received requester change:', payload.eventType);
+        if (mountedRef.current && subscribedRef.current) {
+          try {
+            await fetchRequests(true);
+          } catch (err) {
+            console.error('Error handling requester change:', err);
+          }
         }
       };
 
@@ -298,6 +305,8 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         .on('disconnect', (event) => {
           console.log('Channel disconnected:', event);
           setIsSubscribed(false);
+          subscribedRef.current = false;
+          
           if (mountedRef.current && isOnline) {
             // Auto-reconnect with backoff
             const delay = Math.min(
@@ -326,6 +335,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           if (status === 'SUBSCRIBED') {
             channelRef.current = newChannel;
             setIsSubscribed(true);
+            subscribedRef.current = true;
             setRetryCount(0);
             setError(null);
             
@@ -338,6 +348,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
             console.error(`Channel ${status.toLowerCase()}:`, err);
             setIsSubscribed(false);
+            subscribedRef.current = false;
             channelRef.current = null;
 
             if (retryTimeoutRef.current) {
@@ -371,6 +382,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       console.error('Error in setupRealtimeSubscription:', error);
       setError(error instanceof Error ? error : new Error(String(error)));
       setIsSubscribed(false);
+      subscribedRef.current = false;
       
       // Schedule retry with exponential backoff
       if (retryTimeoutRef.current) {
@@ -431,6 +443,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   useEffect(() => {
     mountedRef.current = true;
     channelIdRef.current = nanoid();
+    subscribedRef.current = false;
 
     // Initial fetch before subscription setup
     const initFetch = async () => {
@@ -450,7 +463,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     // Set up health check interval
     healthCheckRef.current = setInterval(() => {
       if (mountedRef.current && isOnline) {
-        if (!isSubscribed) {
+        if (!isSubscribed || !subscribedRef.current) {
           console.log('Health check: Channel not subscribed, attempting reconnection...');
           setupRealtimeSubscription();
         } else {
@@ -460,6 +473,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       }
     }, HEALTH_CHECK_INTERVAL);
 
+    // Return cleanup function that will run on unmount
     return () => {
       // Set mounted ref to false FIRST before doing any cleanup
       mountedRef.current = false;
@@ -505,6 +519,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       setRetryCount(0);
       setConsecutiveFailures(0);
       channelIdRef.current = nanoid();
+      subscribedRef.current = false;
       setupRealtimeSubscription();
       fetchRequests(true).catch(console.error);
     }).catch(console.error);

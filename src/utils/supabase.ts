@@ -19,7 +19,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   realtime: {
     params: {
-      eventsPerSecond: 5,
+      eventsPerSecond: 10, // Increased from 5 to improve realtime responsiveness
     },
   },
 });
