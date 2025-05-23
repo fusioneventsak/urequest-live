@@ -6,6 +6,8 @@ import type { SongRequest } from '../types';
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRY_ATTEMPTS = 5;
 const HEALTH_CHECK_INTERVAL_MS = 30000;
+const INITIAL_BACKOFF_MS = 1000;
+const MAX_BACKOFF_MS = 30000;
 
 export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const [isLoading, setIsLoading] = useState(true);
@@ -13,12 +15,14 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const [retryCount, setRetryCount] = useState(0);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<Date | null>(null);
   
   const mountedRef = useRef(true);
   const channelRef = useRef<any>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout>();
   const healthCheckRef = useRef<NodeJS.Timeout>();
   const channelIdRef = useRef<string>(nanoid(8));
+  const fetchRetryCountRef = useRef(0);
 
   // Clean up any existing channel subscription
   const cleanupChannel = useCallback(async () => {
@@ -35,17 +39,35 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     }
   }, []);
 
-  // Fetch requests data from Supabase
-  const fetchRequests = useCallback(async () => {
+  // Calculate exponential backoff time
+  const getBackoffTime = useCallback((retryCount: number) => {
+    const backoff = Math.min(
+      INITIAL_BACKOFF_MS * Math.pow(2, retryCount),
+      MAX_BACKOFF_MS
+    );
+    // Add some jitter to prevent all clients retrying simultaneously
+    return backoff + Math.random() * 1000;
+  }, []);
+
+  // Fetch requests data from Supabase with retry capability
+  const fetchRequests = useCallback(async (retryAttempt = 0): Promise<void> => {
     if (!mountedRef.current) return;
+    if (!navigator.onLine) {
+      console.log('Device appears to be offline, skipping fetch');
+      setError(new Error('Network connection unavailable'));
+      return;
+    }
 
     try {
-      setIsLoading(true);
-      setError(null);
+      if (retryAttempt === 0) {
+        setIsLoading(true);
+        setError(null);
+      }
 
-      console.log('Fetching requests with requesters...');
+      console.log(`Fetching requests with requesters (attempt ${retryAttempt + 1})...`);
       
-      const { data: requestsData, error: requestsError } = await supabase
+      // Use timeout to prevent hanging requests
+      const fetchPromise = supabase
         .from('requests')
         .select(`
           *,
@@ -58,39 +80,111 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           )
         `)
         .order('created_at', { ascending: false });
+        
+      // Use Promise.race with a timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out')), 10000);
+      });
+      
+      const response = await Promise.race([fetchPromise, timeoutPromise]) as any;
+      
+      if (response.error) throw response.error;
 
-      if (requestsError) throw requestsError;
-
-      if (requestsData) {
-        const formattedRequests = requestsData.map(request => ({
-          id: request.id,
-          title: request.title,
-          artist: request.artist || '',
-          votes: request.votes || 0,
-          status: request.status || 'pending',
-          isLocked: request.is_locked || false,
-          isPlayed: request.is_played || false,
-          createdAt: new Date(request.created_at).toISOString(),
-          requesters: (request.requesters || []).map(requester => ({
-            id: requester.id,
-            name: requester.name,
-            photo: requester.photo,
-            message: requester.message || '',
-            timestamp: new Date(requester.created_at).toISOString()
-          }))
-        }));
-
-        onUpdate(formattedRequests);
+      // Validate the response data before processing
+      if (!response.data || !Array.isArray(response.data)) {
+        throw new Error('Invalid response format: expected an array');
       }
+
+      // Safely parse and validate each request object
+      const formattedRequests = response.data.map((request: any) => {
+        try {
+          if (!request || typeof request !== 'object') {
+            console.warn('Invalid request object received:', request);
+            return null;
+          }
+
+          // Ensure requesters is an array
+          const requesters = Array.isArray(request.requesters) 
+            ? request.requesters 
+            : [];
+          
+          return {
+            id: request.id,
+            title: request.title || 'Unknown Title',
+            artist: request.artist || '',
+            votes: typeof request.votes === 'number' ? request.votes : 0,
+            status: request.status || 'pending',
+            isLocked: Boolean(request.is_locked),
+            isPlayed: Boolean(request.is_played),
+            createdAt: request.created_at ? new Date(request.created_at).toISOString() : new Date().toISOString(),
+            requesters: requesters.filter(Boolean).map((requester: any) => ({
+              id: requester.id,
+              name: requester.name || 'Anonymous',
+              photo: requester.photo || '',
+              message: requester.message || '',
+              timestamp: requester.created_at 
+                ? new Date(requester.created_at).toISOString() 
+                : new Date().toISOString()
+            }))
+          };
+        } catch (err) {
+          console.error('Error processing request item:', err);
+          return null;
+        }
+      }).filter(Boolean);
+
+      onUpdate(formattedRequests);
+      setLastSuccessfulFetch(new Date());
+      fetchRetryCountRef.current = 0;
     } catch (error) {
       console.error('Error fetching requests:', error);
-      setError(error instanceof Error ? error : new Error(String(error)));
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setError(error instanceof Error ? error : new Error(errorMessage));
+
+      // Specific handling for JSON parsing errors
+      if (error instanceof SyntaxError && errorMessage.includes('JSON')) {
+        console.error('JSON parsing error detected. The response may be corrupted or incomplete.');
+      }
+      
+      // Implement retry with exponential backoff for network errors or JSON parsing errors
+      if (
+        retryAttempt < MAX_RETRY_ATTEMPTS && 
+        mountedRef.current && 
+        navigator.onLine && 
+        (errorMessage.includes('Failed to fetch') || 
+         errorMessage.includes('NetworkError') ||
+         errorMessage.includes('network') ||
+         errorMessage.includes('timeout') ||
+         error instanceof SyntaxError)
+      ) {
+        const backoffTime = getBackoffTime(retryAttempt);
+        console.log(`Retrying fetch in ${Math.round(backoffTime / 1000)} seconds (attempt ${retryAttempt + 1}/${MAX_RETRY_ATTEMPTS})`);
+        
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+        }
+        
+        retryTimeoutRef.current = setTimeout(() => {
+          if (mountedRef.current) {
+            fetchRequests(retryAttempt + 1);
+          }
+        }, backoffTime);
+      } else {
+        fetchRetryCountRef.current++;
+        
+        if (fetchRetryCountRef.current > MAX_RETRY_ATTEMPTS) {
+          console.error('Max fetch retry attempts reached, backing off until next health check');
+        }
+        
+        setIsLoading(false);
+      }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && retryAttempt === 0) {
         setIsLoading(false);
       }
     }
-  }, [onUpdate]);
+  }, [onUpdate, getBackoffTime]);
 
   // Set up real-time subscription
   const setupRealtimeSubscription = useCallback(async () => {
@@ -163,6 +257,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       console.log('Network connection restored');
       setIsOnline(true);
       setRetryCount(0);
+      fetchRetryCountRef.current = 0;
       setupRealtimeSubscription();
       fetchRequests();
     };
@@ -186,6 +281,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   useEffect(() => {
     mountedRef.current = true;
     channelIdRef.current = nanoid(8);
+    fetchRetryCountRef.current = 0;
 
     // Initial fetch before subscription setup
     fetchRequests();
@@ -200,13 +296,23 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     // Set up health check interval
     healthCheckRef.current = setInterval(() => {
       if (mountedRef.current && isOnline) {
+        const timeSinceLastFetch = lastSuccessfulFetch 
+          ? (new Date().getTime() - lastSuccessfulFetch.getTime()) 
+          : Infinity;
+        
+        // Reset fetch retry counter if it's been a while
+        if (fetchRetryCountRef.current > MAX_RETRY_ATTEMPTS && timeSinceLastFetch > HEALTH_CHECK_INTERVAL_MS) {
+          console.log('Resetting fetch retry counter during health check');
+          fetchRetryCountRef.current = 0;
+        }
+
         if (!isSubscribed) {
           console.log('Health check: Channel not subscribed, attempting reconnection...');
           setupRealtimeSubscription();
-        } else {
-          // Periodically refresh data even if subscribed
-          fetchRequests();
         }
+        
+        // Periodically refresh data even if subscribed
+        fetchRequests();
       }
     }, HEALTH_CHECK_INTERVAL_MS);
 
@@ -223,11 +329,12 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       
       cleanupChannel();
     };
-  }, [setupRealtimeSubscription, cleanupChannel, fetchRequests, isSubscribed, isOnline]);
+  }, [setupRealtimeSubscription, cleanupChannel, fetchRequests, isSubscribed, isOnline, lastSuccessfulFetch]);
 
   // Function to manually reconnect
   const reconnect = useCallback(() => {
     console.log('Manual reconnection requested');
+    fetchRetryCountRef.current = 0;
     cleanupChannel().then(() => {
       setRetryCount(0);
       channelIdRef.current = nanoid(8);
@@ -242,6 +349,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     isOnline,
     retryCount,
     refetch: fetchRequests,
-    reconnect
+    reconnect,
+    lastSuccessfulFetch
   };
 }
