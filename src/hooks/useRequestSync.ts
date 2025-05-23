@@ -1,17 +1,19 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase, executeDbOperation } from '../utils/supabase';
 import { cacheService } from '../utils/cache';
-import { executeWithCircuitBreaker } from '../utils/circuitBreaker';
+import { executeWithCircuitBreaker, resetCircuitBreaker } from '../utils/circuitBreaker';
+import { nanoid } from 'nanoid';
 import type { SongRequest } from '../types';
-import { backOff } from 'exponential-backoff';
-import retry from 'retry';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
 const REQUESTS_SERVICE_KEY = 'requests';
-const MAX_RETRY_ATTEMPTS = 10;
+const MAX_RETRY_ATTEMPTS = 15;
 const INITIAL_RETRY_DELAY = 2000;
-const SUBSCRIPTION_INIT_DELAY = 1000;
-const CONNECTION_TIMEOUT = 15000; // 15 second timeout
+const SUBSCRIPTION_INIT_DELAY = 5000; // Increased to 5 seconds
+const MAX_BACKOFF_DELAY = 60000;
+const HEALTH_CHECK_INTERVAL = 30000; // Set to 30 seconds
+const RECONNECT_THRESHOLD = 3;
+const JITTER_MAX = 1000;
 const FETCH_TIMEOUT = 30000; // 30 second timeout for fetch operations
 
 export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
@@ -25,17 +27,20 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout>();
   const healthCheckRef = useRef<NodeJS.Timeout>();
-  const channelIdRef = useRef<string>(`requests_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const channelIdRef = useRef<string>(nanoid());
   const lastFetchRef = useRef<number>(0);
   const lastErrorRef = useRef<string>('');
   const fetchPromiseRef = useRef<Promise<void> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const fetchInProgressRef = useRef(false);
+  const fetchInProgressRef = useRef<boolean>(false);
 
-  // Create a fresh AbortController and clean up any existing one
+  // Use this function to safely create a new AbortController
+  // and clean up any existing one first
   const createFreshAbortController = useCallback(() => {
+    // Clean up existing controller first
     if (abortControllerRef.current) {
       try {
+        // Only abort if it hasn't already been aborted
         if (!abortControllerRef.current.signal.aborted) {
           abortControllerRef.current.abort();
         }
@@ -43,11 +48,12 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         console.warn('Error aborting previous request:', err);
       }
     }
+    
+    // Create a fresh controller
     abortControllerRef.current = new AbortController();
     return abortControllerRef.current.signal;
   }, []);
 
-  // Clean up channel with proper error handling
   const cleanupChannel = useCallback(async () => {
     if (channelRef.current) {
       try {
@@ -58,23 +64,18 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         console.warn('Error cleaning up channel:', err);
       } finally {
         channelRef.current = null;
-        if (mountedRef.current) {
-          setIsSubscribed(false);
-        }
+        setIsSubscribed(false);
       }
     }
   }, []);
 
-  // Fetch requests with proper error handling and retries
   const fetchRequests = useCallback(async (bypassCache = false) => {
-    if (!mountedRef.current || fetchInProgressRef.current) return;
-    if (!navigator.onLine) {
-      console.log('Offline - using cached data');
-      const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
-      if (cachedRequests && mountedRef.current) {
-        onUpdate(cachedRequests);
-        return;
-      }
+    if (!mountedRef.current) return;
+    
+    // Don't allow concurrent fetches
+    if (fetchInProgressRef.current) {
+      console.log('Fetch already in progress, skipping');
+      return;
     }
 
     // Debounce and prevent concurrent fetches
@@ -83,7 +84,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       console.log('Debouncing request fetch...');
       return;
     }
-
+    
     // If a fetch is already in progress, return that promise
     if (fetchPromiseRef.current) {
       return fetchPromiseRef.current;
@@ -92,10 +93,22 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     fetchInProgressRef.current = true;
     lastFetchRef.current = now;
 
-    // Create fresh abort controller
-    const signal = createFreshAbortController();
+    // Reset the circuit breaker if we've had too many failures
+    if (consecutiveFailures >= RECONNECT_THRESHOLD) {
+      resetCircuitBreaker(REQUESTS_SERVICE_KEY);
+    }
 
-    // Create timeout to abort long-running requests
+    // Create a fresh abort controller for this fetch operation
+    let signal: AbortSignal;
+    try {
+      signal = createFreshAbortController();
+    } catch (err) {
+      console.error('Error creating abort controller:', err);
+      // Continue without abort signal if there's an error creating one
+      signal = new AbortController().signal;
+    }
+
+    // Create a timeout to abort the request if it takes too long
     const timeoutId = setTimeout(() => {
       if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
         console.warn(`Fetch operation timed out after ${FETCH_TIMEOUT}ms`);
@@ -107,10 +120,8 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       try {
         if (!mountedRef.current) return;
         
-        if (mountedRef.current) {
-          setIsLoading(true);
-          setError(null);
-        }
+        setIsLoading(true);
+        setError(null);
 
         if (!bypassCache) {
           const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
@@ -124,92 +135,103 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           }
         }
 
-        const operation = retry.operation({
-          retries: MAX_RETRY_ATTEMPTS,
-          factor: 2,
-          minTimeout: INITIAL_RETRY_DELAY,
-          randomize: true
-        });
+        await executeWithCircuitBreaker(REQUESTS_SERVICE_KEY, async () => {
+          await executeDbOperation('requests:list', async () => {
+            if (!mountedRef.current) return;
+            console.log('Fetching requests with requesters...');
+            
+            const { data: requestsData, error: requestsError } = await supabase
+              .from('requests')
+              .select(`
+                *,
+                requesters (
+                  id,
+                  name,
+                  photo,
+                  message,
+                  created_at
+                )
+              `)
+              .order('created_at', { ascending: false })
+              .abortSignal(signal);
 
-        await new Promise((resolve, reject) => {
-          operation.attempt(async (currentAttempt) => {
-            try {
-              await executeWithCircuitBreaker(REQUESTS_SERVICE_KEY, async () => {
-                await executeDbOperation('requests:list', async () => {
-                  const { data: requestsData, error: requestsError } = await supabase
-                    .from('requests')
-                    .select(`
-                      *,
-                      requesters (
-                        id,
-                        name,
-                        photo,
-                        message,
-                        created_at
-                      )
-                    `)
-                    .order('created_at', { ascending: false })
-                    .abortSignal(signal);
+            if (requestsError) throw requestsError;
 
-                  if (requestsError) throw requestsError;
-                  if (!requestsData) throw new Error('No data returned from database');
-
-                  const formattedRequests = requestsData.map(request => ({
-                    id: request.id,
-                    title: request.title,
-                    artist: request.artist || '',
-                    votes: request.votes || 0,
-                    status: request.status || 'pending',
-                    isLocked: request.is_locked || false,
-                    isPlayed: request.is_played || false,
-                    createdAt: new Date(request.created_at).toISOString(),
-                    requesters: (request.requesters || []).map(requester => ({
-                      id: requester.id,
-                      name: requester.name,
-                      photo: requester.photo,
-                      message: requester.message || '',
-                      timestamp: new Date(requester.created_at).toISOString()
-                    }))
-                  }));
-
-                  if (mountedRef.current) {
-                    cacheService.setRequests(REQUESTS_CACHE_KEY, formattedRequests);
-                    onUpdate(formattedRequests);
-                    setConsecutiveFailures(0);
-                  }
-                });
-              });
-              resolve(true);
-            } catch (error) {
-              if (operation.retry(error as Error)) {
-                console.warn(`Retry attempt ${currentAttempt}/${MAX_RETRY_ATTEMPTS}`);
-                return;
+            if (!requestsData) {
+              console.log('No requests found');
+              if (mountedRef.current) {
+                onUpdate([]);
               }
-              reject(operation.mainError());
+              return;
             }
-          });
-        });
 
+            const formattedRequests = requestsData.map(request => ({
+              id: request.id,
+              title: request.title,
+              artist: request.artist || '',
+              votes: request.votes || 0,
+              status: request.status || 'pending',
+              isLocked: request.is_locked || false,
+              isPlayed: request.is_played || false,
+              createdAt: new Date(request.created_at).toISOString(),
+              requesters: (request.requesters || []).map(requester => ({
+                id: requester.id,
+                name: requester.name,
+                photo: requester.photo,
+                message: requester.message || '',
+                timestamp: new Date(requester.created_at).toISOString()
+              }))
+            }));
+
+            if (mountedRef.current) {
+              cacheService.setRequests(REQUESTS_CACHE_KEY, formattedRequests);
+              onUpdate(formattedRequests);
+              setConsecutiveFailures(0);
+            }
+          }, signal);
+        }, signal);
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError' && !mountedRef.current) {
+        // Skip AbortError logging if component is unmounting
+        if (error instanceof Error && 
+            (error.name === 'AbortError' || 
+             error.message.includes('aborted') || 
+             error.message.includes('Component unmounted')) && 
+            !mountedRef.current) {
           console.log('Request aborted due to component unmount');
           return;
         }
 
-        console.error('Error fetching requests:', error);
+        // If component is still mounted, handle error appropriately
         if (mountedRef.current) {
-          setError(error instanceof Error ? error : new Error(String(error)));
-          setConsecutiveFailures(prev => prev + 1);
+          // Only log network/server errors, not abort errors
+          if (!(error instanceof Error && 
+               (error.name === 'AbortError' || 
+                error.message.includes('aborted') || 
+                error.message.includes('Component unmounted')))) {
+            console.error('Error fetching requests:', error);
+            setError(error instanceof Error ? error : new Error(String(error)));
+            setConsecutiveFailures(prev => prev + 1);
+          }
+
+          // Use cached data if available
+          const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
+          if (cachedRequests) {
+            console.warn('Using stale cache due to fetch error');
+            onUpdate(cachedRequests);
+          }
         }
 
-        const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
-        if (cachedRequests && mountedRef.current) {
-          console.warn('Using stale cache due to fetch error');
-          onUpdate(cachedRequests);
+        // Handle reconnection if we've had too many failures
+        if (consecutiveFailures >= RECONNECT_THRESHOLD && mountedRef.current) {
+          console.log('Too many consecutive failures, forcing reconnect...');
+          cleanupChannel();
+          channelIdRef.current = nanoid();
+          setRetryCount(0);
+          setConsecutiveFailures(0);
         }
-
       } finally {
         clearTimeout(timeoutId);
+
         if (mountedRef.current) {
           setIsLoading(false);
         }
@@ -222,23 +244,22 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     return fetchPromise;
   }, [onUpdate, consecutiveFailures, cleanupChannel, createFreshAbortController]);
 
-  // Set up realtime subscription with proper error handling
   const setupRealtimeSubscription = useCallback(async () => {
-    if (!mountedRef.current || !navigator.onLine) return;
+    if (!mountedRef.current || !isOnline) return;
 
     try {
       await cleanupChannel();
 
-      const channelId = channelIdRef.current;
+      const channelId = `requests-${channelIdRef.current}`;
       console.log(`Setting up new request sync channel: ${channelId}`);
 
-      const channel = supabase.channel(channelId, {
+      const newChannel = supabase.channel(channelId, {
         config: {
           broadcast: { self: true },
           presence: { key: channelId },
           retryAfter: INITIAL_RETRY_DELAY,
-          timeout: CONNECTION_TIMEOUT
-        }
+          timeout: 30000 // Increased timeout to 30 seconds
+        },
       });
 
       // Keep track of event handlers to avoid issues with callback references
@@ -256,12 +277,14 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         }
       };
 
-      channel
-        .on('postgres_changes',
+      newChannel
+        .on(
+          'postgres_changes',
           { event: '*', schema: 'public', table: 'requests' },
           requestChangeHandler
         )
-        .on('postgres_changes',
+        .on(
+          'postgres_changes',
           { event: '*', schema: 'public', table: 'requesters' },
           requesterChangeHandler
         )
@@ -269,69 +292,101 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           console.error('Channel error:', err);
           lastErrorRef.current = err.message || 'Unknown error';
         })
-        .on('disconnect', async (event) => {
+        .on('system', (event) => {
+          console.log('Channel system event:', event);
+        })
+        .on('disconnect', (event) => {
           console.log('Channel disconnected:', event);
-          if (mountedRef.current) {
-            setIsSubscribed(false);
-          }
-
-          if (mountedRef.current && navigator.onLine) {
+          setIsSubscribed(false);
+          if (mountedRef.current && isOnline) {
+            // Auto-reconnect with backoff
             const delay = Math.min(
               INITIAL_RETRY_DELAY * Math.pow(1.5, retryCount),
-              60000 // Max 1 minute
+              MAX_BACKOFF_DELAY
             );
+            
+            if (retryTimeoutRef.current) {
+              clearTimeout(retryTimeoutRef.current);
+            }
+            
+            retryTimeoutRef.current = setTimeout(() => {
+              if (mountedRef.current) {
+                setRetryCount(prev => prev + 1);
+                channelIdRef.current = nanoid();
+                setupRealtimeSubscription();
+              }
+            }, delay);
+          }
+        })
+        .subscribe(async (status, err) => {
+          if (!mountedRef.current) return;
+
+          console.log(`Channel ${channelId} status: ${status}`);
+
+          if (status === 'SUBSCRIBED') {
+            channelRef.current = newChannel;
+            setIsSubscribed(true);
+            setRetryCount(0);
+            setError(null);
+            
+            // Fetch data after successful subscription
+            setTimeout(() => {
+              if (mountedRef.current) {
+                fetchRequests(true).catch(console.error);
+              }
+            }, 1000);
+          } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            console.error(`Channel ${status.toLowerCase()}:`, err);
+            setIsSubscribed(false);
+            channelRef.current = null;
 
             if (retryTimeoutRef.current) {
               clearTimeout(retryTimeoutRef.current);
             }
 
-            retryTimeoutRef.current = setTimeout(() => {
-              if (mountedRef.current) {
-                setRetryCount(prev => prev + 1);
-                channelIdRef.current = `requests_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-                setupRealtimeSubscription();
-              }
-            }, delay);
+            if (retryCount < MAX_RETRY_ATTEMPTS && isOnline && mountedRef.current) {
+              const backoff = Math.min(
+                INITIAL_RETRY_DELAY * Math.pow(2, retryCount),
+                MAX_BACKOFF_DELAY
+              );
+              const jitter = Math.floor(Math.random() * JITTER_MAX);
+              const delay = backoff + jitter;
+
+              console.log(`Reconnecting in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+
+              retryTimeoutRef.current = setTimeout(() => {
+                if (mountedRef.current) {
+                  setRetryCount(prev => prev + 1);
+                  channelIdRef.current = nanoid();
+                  setupRealtimeSubscription();
+                }
+              }, delay);
+            } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
+              const errorMessage = `Maximum retry attempts reached. Last error: ${lastErrorRef.current}`;
+              setError(new Error(errorMessage));
+            }
           }
         });
-
-      channelRef.current = channel;
-
-      const { error: subscribeError } = await channel.subscribe(async (status) => {
-        if (!mountedRef.current) return;
-
-        console.log(`Channel ${channelId} status: ${status}`);
-
-        if (status === 'SUBSCRIBED') {
-          if (mountedRef.current) {
-            setIsSubscribed(true);
-            setRetryCount(0);
-            setError(null);
-          }
-
-          // Fetch initial data after successful subscription
-          setTimeout(() => {
-            if (mountedRef.current) {
-              fetchRequests(true).catch(console.error);
-            }
-          }, SUBSCRIPTION_INIT_DELAY);
-        }
-      });
-
-      if (subscribeError) throw subscribeError;
-
     } catch (error) {
       console.error('Error in setupRealtimeSubscription:', error);
-      if (mountedRef.current) {
-        setError(error instanceof Error ? error : new Error(String(error)));
-        setIsSubscribed(false);
+      setError(error instanceof Error ? error : new Error(String(error)));
+      setIsSubscribed(false);
+      
+      // Schedule retry with exponential backoff
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
       }
-
+      
       if (retryCount < MAX_RETRY_ATTEMPTS && mountedRef.current) {
-        const delay = Math.min(
+        const backoff = Math.min(
           INITIAL_RETRY_DELAY * Math.pow(2, retryCount),
-          60000
+          MAX_BACKOFF_DELAY
         );
+        const jitter = Math.floor(Math.random() * JITTER_MAX);
+        const delay = backoff + jitter;
+        
+        console.log(`Scheduling reconnect in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+        
         retryTimeoutRef.current = setTimeout(() => {
           if (mountedRef.current) {
             setRetryCount(prev => prev + 1);
@@ -340,27 +395,24 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         }, delay);
       }
     }
-  }, [fetchRequests, retryCount, isSubscribed, cleanupChannel]);
+  }, [cleanupChannel, fetchRequests, isSubscribed, retryCount, isOnline]);
 
   // Handle online/offline events
   useEffect(() => {
     const handleOnline = () => {
       console.log('Network connection restored');
-      if (mountedRef.current) {
-        setIsOnline(true);
-        setRetryCount(0);
-        setupRealtimeSubscription();
-        fetchRequests(true).catch(console.error);
-      }
+      setIsOnline(true);
+      setRetryCount(0);
+      setupRealtimeSubscription();
+      fetchRequests(true).catch(console.error);
     };
 
     const handleOffline = () => {
       console.log('Network connection lost');
-      if (mountedRef.current) {
-        setIsOnline(false);
-      }
+      setIsOnline(false);
       cleanupChannel();
-
+      
+      // Abort any in-flight requests when going offline
       if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
         abortControllerRef.current.abort('Network connection lost');
       }
@@ -378,43 +430,49 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   // Initialize subscription and set up health checks
   useEffect(() => {
     mountedRef.current = true;
-    channelIdRef.current = `requests_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    channelIdRef.current = nanoid();
 
+    // Initial fetch before subscription setup
     const initFetch = async () => {
       if (!mountedRef.current) return;
       await fetchRequests();
-
+      
+      // Setup subscription after initial fetch
       setTimeout(() => {
         if (mountedRef.current) {
           setupRealtimeSubscription();
         }
       }, SUBSCRIPTION_INIT_DELAY);
     };
-
+    
     initFetch().catch(console.error);
 
+    // Set up health check interval
     healthCheckRef.current = setInterval(() => {
-      if (mountedRef.current && navigator.onLine) {
+      if (mountedRef.current && isOnline) {
         if (!isSubscribed) {
           console.log('Health check: Channel not subscribed, attempting reconnection...');
           setupRealtimeSubscription();
         } else {
+          // Periodically refresh data even if subscribed
           fetchRequests(true).catch(console.error);
         }
       }
-    }, 30000); // Check every 30 seconds
+    }, HEALTH_CHECK_INTERVAL);
 
     return () => {
+      // Set mounted ref to false FIRST before doing any cleanup
       mountedRef.current = false;
-
+      
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
       }
-
+      
       if (healthCheckRef.current) {
         clearInterval(healthCheckRef.current);
       }
-
+      
+      // Safely abort any in-flight requests on unmount
       if (abortControllerRef.current) {
         try {
           if (!abortControllerRef.current.signal.aborted) {
@@ -425,12 +483,32 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         }
         abortControllerRef.current = null;
       }
-
+      
       cleanupChannel().catch(err => {
         console.warn('Error cleaning up channel on unmount:', err);
       });
     };
-  }, [setupRealtimeSubscription, cleanupChannel, fetchRequests, isSubscribed]);
+  }, [setupRealtimeSubscription, cleanupChannel, fetchRequests, isSubscribed, isOnline]);
+
+  // Function to manually reconnect
+  const reconnect = useCallback(() => {
+    console.log('Manual reconnection requested');
+    
+    // Abort any in-flight requests
+    if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
+      abortControllerRef.current.abort('Manual reconnection requested');
+      abortControllerRef.current = null;
+    }
+    
+    cleanupChannel().then(() => {
+      resetCircuitBreaker(REQUESTS_SERVICE_KEY);
+      setRetryCount(0);
+      setConsecutiveFailures(0);
+      channelIdRef.current = nanoid();
+      setupRealtimeSubscription();
+      fetchRequests(true).catch(console.error);
+    }).catch(console.error);
+  }, [cleanupChannel, setupRealtimeSubscription, fetchRequests]);
 
   return {
     isLoading,
@@ -438,15 +516,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     isOnline,
     retryCount,
     refetch: () => fetchRequests(true),
-    reconnect: () => {
-      console.log('Manual reconnection requested');
-      cleanupChannel().then(() => {
-        setRetryCount(0);
-        setConsecutiveFailures(0);
-        channelIdRef.current = `requests_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        setupRealtimeSubscription();
-        fetchRequests(true).catch(console.error);
-      }).catch(console.error);
-    }
+    reconnect
   };
 }

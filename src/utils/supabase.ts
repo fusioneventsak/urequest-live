@@ -38,42 +38,46 @@ export async function executeDbOperation<T>(
   signal?: AbortSignal
 ): Promise<T> {
   try {
-    // Check network status first
+    // Check if the operation is already aborted
+    if (signal?.aborted) {
+      const abortError = new Error('Operation aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+
+    // Check network status
     if (!navigator.onLine) {
       throw new Error('No network connection available');
     }
 
-    // Add abort signal to operation context if provided
+    // Add timeout protection
+    const operationPromise = operation();
     if (signal) {
-      // Check if already aborted
-      if (signal.aborted) {
-        throw new Error('Operation aborted');
-      }
-
-      // Create timeout for operation
-      const timeout = setTimeout(() => {
-        throw new Error('Operation timed out');
-      }, 30000); // 30 second timeout
-
-      try {
-        return await operation();
-      } finally {
-        clearTimeout(timeout);
-      }
+      // Create a race between the operation and the abort signal
+      const abortPromise = new Promise<T>((_, reject) => {
+        signal.addEventListener('abort', () => {
+          const abortError = new Error('Operation aborted');
+          abortError.name = 'AbortError';
+          reject(abortError);
+        }, { once: true });
+      });
+      
+      // Use Promise.race to handle whichever resolves/rejects first
+      return await Promise.race([operationPromise, abortPromise]);
+    } else {
+      return await operationPromise;
     }
-
-    return await operation();
   } catch (error: any) {
     // Handle AbortError silently - this is expected when component unmounts
     if (error.name === 'AbortError' || error.message?.includes('aborted')) {
       console.log(`Request aborted for ${operationKey}`);
-      return { data: null, error: null } as T;
+      return { data: null, error: null } as unknown as T;
     }
 
     // Handle component unmount silently
     if (error.message?.includes('Component unmounted')) {
       console.log(`Operation cancelled - component unmounted: ${operationKey}`);
-      return { data: null, error: null } as T;
+      return { data: null, error: null } as unknown as T;
     }
 
     // Handle timeout errors
@@ -83,7 +87,10 @@ export async function executeDbOperation<T>(
     }
 
     // Handle network errors
-    if (error.message?.includes('network') || error.name === 'NetworkError' || !navigator.onLine) {
+    if (error.message?.includes('network') || 
+        error.name === 'NetworkError' || 
+        error.message?.includes('fetch') || 
+        !navigator.onLine) {
       console.error(`Network error during operation: ${operationKey}`);
       throw new Error(`Network error: ${error.message || 'Failed to connect to server'}`);
     }
@@ -94,7 +101,8 @@ export async function executeDbOperation<T>(
       name: error.name,
       message: error.message,
       stack: error.stack,
-      context: operationKey
+      context: operationKey,
+      url: error.requestUrl || 'unknown'
     });
 
     // Throw a properly formatted error

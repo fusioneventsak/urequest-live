@@ -56,7 +56,12 @@ class CircuitBreaker {
   /**
    * Execute operation with circuit breaker pattern
    */
-  public async execute<T>(operation: () => Promise<T>): Promise<T> {
+  public async execute<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    // If signal is already aborted, fail fast
+    if (signal?.aborted) {
+      throw new Error('Operation aborted');
+    }
+    
     if (this.state === CircuitState.OPEN) {
       if (Date.now() < this.nextAttempt) {
         throw new Error(`Service ${this.service} is unavailable (circuit open). Next attempt at ${new Date(this.nextAttempt).toLocaleTimeString()}`);
@@ -65,10 +70,23 @@ class CircuitBreaker {
     }
     
     try {
+      // Check for abort signal again before executing operation
+      if (signal?.aborted) {
+        throw new Error('Operation aborted');
+      }
+      
       const result = await operation();
       this.recordSuccess();
       return result;
     } catch (error) {
+      // Don't record failures for aborted operations
+      if (error instanceof Error && 
+          (error.name === 'AbortError' || 
+           error.message.includes('aborted') || 
+           error.message.includes('Component unmounted'))) {
+        throw error; // Re-throw but don't record as circuit failure
+      }
+      
       this.recordFailure(error);
       this.lastError = error instanceof Error ? error : new Error(String(error));
       throw this.lastError;
@@ -171,10 +189,16 @@ function getCircuitBreaker(service: string): CircuitBreaker {
  */
 export async function executeWithCircuitBreaker<T>(
   service: string,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
+  signal?: AbortSignal
 ): Promise<T> {
+  // If signal is already aborted, fail fast
+  if (signal?.aborted) {
+    throw new Error('Operation aborted');
+  }
+  
   const circuitBreaker = getCircuitBreaker(service);
-  return circuitBreaker.execute(operation);
+  return circuitBreaker.execute(operation, signal);
 }
 
 /**
