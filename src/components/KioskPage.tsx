@@ -207,7 +207,7 @@ export function KioskPage({
         >
           <Logo 
             url={logoUrl}
-            className="h-24 mx-auto mb-2"
+            className="h-24 mx-auto mb-6"
           />
           <h1 
             className="text-3xl font-bold mb-2"

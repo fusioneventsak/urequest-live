@@ -25,6 +25,7 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
         justifyContent: "center",
         position: "relative",
         animation: "logoGlow 2s ease-in-out infinite",
+        marginBottom: "1.5rem" // Added explicit margin to ensure proper spacing
       }}
     >
       <img 
@@ -32,7 +33,7 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
         alt="Logo" 
         className="frontend-logo"
         style={{
-          maxHeight: "200px", // Increased from previous size
+          maxHeight: "200px", 
           width: "auto",
           height: "auto",
           display: "block",
