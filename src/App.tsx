@@ -25,9 +25,11 @@ import { TickerManager } from './components/TickerManager';
 import { BackendTabs } from './components/BackendTabs';
 import { LandingPage } from './components/LandingPage';
 import { Logo } from './components/shared/Logo';
+import { KioskPage } from './components/KioskPage';
 
 const DEFAULT_BAND_LOGO = "https://www.fusion-events.ca/wp-content/uploads/2025/03/ulr-wordmark.png";
 const BACKEND_PATH = "backend";
+const KIOSK_PATH = "kiosk";
 const MAX_PHOTO_SIZE = 300 * 1024; // 300KB limit for photos
 
 function App() {
@@ -35,6 +37,7 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isBackend, setIsBackend] = useState(false);
+  const [isKiosk, setIsKiosk] = useState(false);
   
   // Backend tab state
   const [activeBackendTab, setActiveBackendTab] = useState<'requests' | 'setlists' | 'songs' | 'settings'>('requests');
@@ -56,19 +59,21 @@ function App() {
   const { isLoading: isFetchingRequests, reconnect: reconnectRequests } = useRequestSync(setRequests);
   const { isLoading: isFetchingSetLists, refetch: refreshSetLists } = useSetListSync(setSetLists);
 
-  // Check if we should show the backend
+  // Check if we should show the backend or kiosk view
   useEffect(() => {
-    const checkBackendPath = () => {
+    const checkPathSpecialCases = () => {
       const path = window.location.pathname.toLowerCase();
       const isBackendPath = path === `/${BACKEND_PATH}` || path.startsWith(`/${BACKEND_PATH}/`);
+      const isKioskPath = path === `/${KIOSK_PATH}` || path.startsWith(`/${KIOSK_PATH}/`);
       setIsBackend(isBackendPath);
+      setIsKiosk(isKioskPath);
     };
 
-    checkBackendPath();
-    window.addEventListener('popstate', checkBackendPath);
+    checkPathSpecialCases();
+    window.addEventListener('popstate', checkPathSpecialCases);
 
     return () => {
-      window.removeEventListener('popstate', checkBackendPath);
+      window.removeEventListener('popstate', checkPathSpecialCases);
     };
   }, []);
 
@@ -108,12 +113,21 @@ function App() {
   const navigateToBackend = useCallback(() => {
     window.history.pushState({}, '', `/${BACKEND_PATH}`);
     setIsBackend(true);
+    setIsKiosk(false);
   }, []);
   
   // Handle navigation to frontend
   const navigateToFrontend = useCallback(() => {
     window.history.pushState({}, '', '/');
     setIsBackend(false);
+    setIsKiosk(false);
+  }, []);
+
+  // Handle navigation to kiosk mode
+  const navigateToKiosk = useCallback(() => {
+    window.history.pushState({}, '', `/${KIOSK_PATH}`);
+    setIsBackend(false);
+    setIsKiosk(true);
   }, []);
 
   // Handle admin login
@@ -195,24 +209,10 @@ function App() {
       let requestId: string;
 
       if (existingRequest) {
-        // Check if user already requested this song
-        const { data: existingRequester, error: requesterCheckError } = await supabase
-          .from('requesters')
-          .select('id')
-          .eq('request_id', existingRequest.id)
-          .eq('name', data.requestedBy)
-          .maybeSingle();
-
-        if (requesterCheckError && requesterCheckError.code !== 'PGRST116') {
-          throw requesterCheckError;
-        }
-
-        if (existingRequester) {
-          throw new Error(`You've already requested "${existingRequest.title}". Try another song!`);
-        }
-
-        // Add requester to existing request
+        // For kiosk mode, we always add a new requester even if song is already requested
         requestId = existingRequest.id;
+        
+        // Add requester to existing request
         const { error: requesterError } = await supabase
           .from('requesters')
           .insert({
@@ -640,8 +640,18 @@ function App() {
     return <BackendLogin onLogin={handleAdminLogin} />;
   }
 
-  // Get locked request for ticker
-  const lockedRequest = requests.find(r => r.isLocked && !r.isPlayed);
+  // Show kiosk page if accessing /kiosk
+  if (isKiosk) {
+    return (
+      <KioskPage 
+        songs={songs}
+        requests={requests}
+        activeSetList={activeSetList}
+        logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
+        onSubmitRequest={handleSubmitRequest}
+      />
+    );
+  }
 
   // Show backend if accessing /backend and authenticated
   if (isBackend && isAdmin) {
@@ -666,6 +676,12 @@ function App() {
                   className="neon-button"
                 >
                   Exit to Public View
+                </button>
+                <button 
+                  onClick={navigateToKiosk}
+                  className="neon-button"
+                >
+                  Kiosk View
                 </button>
                 <button 
                   onClick={handleAdminLogout}
