@@ -276,7 +276,8 @@ export function KioskPage({
                 {filteredSongs.map((song) => (
                   <div 
                     key={song.id}
-                    className="glass-effect rounded-lg p-4 flex items-center gap-3 transition-all duration-300"
+                    onClick={() => setSelectedSong(song)}
+                    className="glass-effect rounded-lg p-4 flex items-center gap-3 transition-all duration-300 cursor-pointer hover:bg-neon-purple/20 active:bg-neon-purple/30"
                     style={{
                       borderColor: songBorderColor,
                       borderWidth: '1px',
@@ -334,7 +335,10 @@ export function KioskPage({
                       )}
                     </div>
                     <button
-                      onClick={() => setSelectedSong(song)}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent triggering the parent div's onClick
+                        setSelectedSong(song);
+                      }}
                       className="px-3 py-1.5 rounded-lg text-white transition-colors whitespace-nowrap text-sm font-extrabold tracking-wide uppercase"
                       style={{
                         backgroundColor: accentColor,
@@ -364,12 +368,13 @@ export function KioskPage({
                   .map((request) => (
                     <div
                       key={request.id}
-                      className="glass-effect rounded-lg p-4 relative overflow-hidden transition-all duration-300 flex items-center"
+                      className="glass-effect rounded-lg p-4 relative overflow-hidden transition-all duration-300 flex items-center cursor-pointer hover:bg-neon-purple/20 active:bg-neon-purple/30"
                       style={{
                         borderColor: songBorderColor,
                         borderWidth: '1px',
                         boxShadow: `0 0 8px ${songBorderColor}50`,
                       }}
+                      onClick={() => handleVote(request.id)}
                     >
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-white text-lg truncate">
@@ -419,7 +424,10 @@ export function KioskPage({
                         </div>
 
                         <button
-                          onClick={() => handleVote(request.id)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering the parent div's onClick
+                            handleVote(request.id);
+                          }}
                           disabled={isSubmitting}
                           className={`px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1 font-semibold flex-shrink-0 text-white text-xs ${
                             isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
