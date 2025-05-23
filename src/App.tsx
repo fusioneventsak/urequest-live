@@ -655,6 +655,9 @@ function App() {
 
   // Show backend if accessing /backend and authenticated
   if (isBackend && isAdmin) {
+    // Define lockedRequest variable before using it
+    const lockedRequest = requests.find(r => r.isLocked && !r.isPlayed);
+    
     return (
       <div className="min-h-screen bg-darker-purple">
         <div className="max-w-7xl mx-auto p-4 sm:p-6">

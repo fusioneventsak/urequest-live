@@ -9,6 +9,7 @@ const SET_LISTS_SERVICE_KEY = 'setLists';
 const MAX_RETRY_ATTEMPTS = 10;
 const INITIAL_RETRY_DELAY = 2000;
 const SUBSCRIPTION_INIT_DELAY = 1000;
+const CONNECTION_TIMEOUT = 15000; // Increased timeout to 15 seconds
 
 export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
   const [isLoading, setIsLoading] = useState(true);
@@ -90,9 +91,10 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
     let connectionCheckInterval: NodeJS.Timeout;
 
     const calculateRetryDelay = (attempt: number) => {
-      const baseDelay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-      const jitter = Math.random() * 1000;
-      return Math.min(baseDelay + jitter, 60000);
+      // Exponential backoff with jitter
+      const baseDelay = INITIAL_RETRY_DELAY * Math.pow(1.5, attempt);
+      const jitter = Math.random() * 2000; // Add up to 2 seconds of jitter
+      return Math.min(baseDelay + jitter, 60000); // Cap at 60 seconds
     };
 
     const cleanupChannel = async () => {
@@ -108,15 +110,33 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
       }
     };
 
-    const waitForConnection = async (timeout = 5000): Promise<boolean> => {
+    const waitForConnection = async (timeout = CONNECTION_TIMEOUT): Promise<boolean> => {
+      // Try to establish connection with increased timeout
       const startTime = Date.now();
+      let isConnected = false;
+      
+      // Check initial connection state
+      if (supabase.realtime.isConnected()) {
+        return true;
+      }
+      
+      // Attempt to manually connect if not already connected
+      try {
+        await supabase.realtime.connect();
+      } catch (err) {
+        console.warn('Error manually connecting to realtime:', err);
+      }
+      
+      // Wait for connection with polling
       while (Date.now() - startTime < timeout) {
         if (supabase.realtime.isConnected()) {
-          return true;
+          isConnected = true;
+          break;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
-      return false;
+      
+      return isConnected;
     };
 
     const setupRealtimeSubscription = async () => {
@@ -126,14 +146,35 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         if (retryCount >= MAX_RETRY_ATTEMPTS) {
           console.error('Max retry attempts reached for set list subscription');
           setError(new Error('Failed to establish realtime connection after maximum attempts'));
+          // Still proceed with normal data fetching even if realtime fails
+          await fetchSetLists(true);
           return;
         }
 
         await cleanupChannel();
 
+        // Wait for connection with increased timeout
+        console.log('Waiting for realtime connection...');
         const isConnected = await waitForConnection();
+        
         if (!isConnected) {
-          throw new Error('Failed to establish realtime connection');
+          console.warn('Failed to establish realtime connection, will retry later');
+          
+          // Fetch data anyway even if realtime connection fails
+          await fetchSetLists(true);
+          
+          // Schedule retry
+          if (mounted && retryCount < MAX_RETRY_ATTEMPTS) {
+            const delay = calculateRetryDelay(retryCount);
+            console.log(`Retrying realtime connection in ${Math.round(delay/1000)}s (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+            retryTimeout = setTimeout(() => {
+              if (mounted) {
+                setRetryCount(prev => prev + 1);
+                setupRealtimeSubscription();
+              }
+            }, delay);
+          }
+          return;
         }
 
         const channelId = `set_lists_changes_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -202,7 +243,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
                   
                   if (mounted && retryCount < MAX_RETRY_ATTEMPTS) {
                     const delay = calculateRetryDelay(retryCount);
-                    console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+                    console.log(`Retrying in ${Math.round(delay/1000)}s (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
                     retryTimeout = setTimeout(() => {
                       if (mounted) {
                         setRetryCount(prev => prev + 1);
@@ -227,6 +268,13 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
           setError(error instanceof Error ? error : new Error(String(error)));
           setIsSubscribed(false);
           
+          // Still fetch data even if subscription fails
+          try {
+            await fetchSetLists(true);
+          } catch (err) {
+            console.error('Error fetching data after subscription failure:', err);
+          }
+          
           if (retryCount < MAX_RETRY_ATTEMPTS) {
             const delay = calculateRetryDelay(retryCount);
             retryTimeout = setTimeout(() => {
@@ -250,14 +298,15 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         console.log('Realtime connection lost, attempting to reconnect...');
         setupRealtimeSubscription();
       }
-    }, 5000);
+    }, 10000); // Check every 10 seconds
 
     // Refresh data periodically when subscribed
     const refreshInterval = setInterval(() => {
-      if (mounted && isSubscribed) {
+      if (mounted) {
+        // Always fetch data periodically, regardless of subscription status
         fetchSetLists(true).catch(console.error);
       }
-    }, 5 * 60 * 1000);
+    }, 5 * 60 * 1000); // Every 5 minutes
 
     return () => {
       mounted = false;
