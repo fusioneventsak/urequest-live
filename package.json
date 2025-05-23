@@ -19,12 +19,11 @@
     "react-hot-toast": "^2.4.1",
     "uuid": "^9.0.1",
     "lz-string": "^1.5.0",
-    "p-limit": "^5.0.0",
-    "nanoid": "^5.0.6"
+    "p-limit": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
+    "@types/react-dom": "^18.2.17", 
     "@types/uuid": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
     "@typescript-eslint/parser": "^6.14.0",

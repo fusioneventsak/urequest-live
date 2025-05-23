@@ -8,12 +8,12 @@ const REQUESTS_CACHE_KEY = 'requests:all';
 const REQUESTS_SERVICE_KEY = 'requests';
 const MAX_RETRY_ATTEMPTS = 15;
 const INITIAL_RETRY_DELAY = 2000;
-const SUBSCRIPTION_INIT_DELAY = 5000; // Increased to 5 seconds
+const SUBSCRIPTION_INIT_DELAY = 5000;
 const MAX_BACKOFF_DELAY = 60000;
-const HEALTH_CHECK_INTERVAL = 30000; // Set to 30 seconds
+const HEALTH_CHECK_INTERVAL = 30000;
 const RECONNECT_THRESHOLD = 3;
 const JITTER_MAX = 1000;
-const FETCH_TIMEOUT = 30000; // 30 second timeout for fetch operations
+const FETCH_TIMEOUT = 30000;
 
 export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const [isLoading, setIsLoading] = useState(true);
@@ -32,13 +32,9 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const fetchPromiseRef = useRef<Promise<void> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Use this function to safely create a new AbortController
-  // and clean up any existing one first
   const createFreshAbortController = useCallback(() => {
-    // Clean up existing controller first
     if (abortControllerRef.current) {
       try {
-        // Only abort if it hasn't already been aborted
         if (!abortControllerRef.current.signal.aborted) {
           abortControllerRef.current.abort();
         }
@@ -47,7 +43,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       }
     }
     
-    // Create a fresh controller
     abortControllerRef.current = new AbortController();
     return abortControllerRef.current.signal;
   }, []);
@@ -70,36 +65,26 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const fetchRequests = useCallback(async (bypassCache = false) => {
     if (!mountedRef.current) return;
 
-    // Debounce and prevent concurrent fetches
     const now = Date.now();
     if (now - lastFetchRef.current < 1000 && !bypassCache) {
       console.log('Debouncing request fetch...');
       return;
     }
     
-    // If a fetch is already in progress, return that promise
     if (fetchPromiseRef.current) {
       return fetchPromiseRef.current;
     }
 
     lastFetchRef.current = now;
 
-    // Reset the circuit breaker if we've had too many failures
-    if (consecutiveFailures >= RECONNECT_THRESHOLD) {
-      resetCircuitBreaker(REQUESTS_SERVICE_KEY);
-    }
-
-    // Create a fresh abort controller for this fetch operation
     let signal: AbortSignal;
     try {
       signal = createFreshAbortController();
     } catch (err) {
       console.error('Error creating abort controller:', err);
-      // Continue without abort signal if there's an error creating one
       signal = new AbortController().signal;
     }
 
-    // Create a timeout to abort the request if it takes too long
     const timeoutId = setTimeout(() => {
       if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
         console.warn(`Fetch operation timed out after ${FETCH_TIMEOUT}ms`);
@@ -180,7 +165,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           });
         });
       } catch (error) {
-        // Skip AbortError logging if component is unmounting
         if (error instanceof Error && error.name === 'AbortError' && !mountedRef.current) {
           console.log('Request aborted due to component unmount');
           return;
@@ -233,21 +217,20 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           broadcast: { self: true },
           presence: { key: channelId },
           retryAfter: INITIAL_RETRY_DELAY,
-          timeout: 30000 // Increased timeout to 30 seconds
+          timeout: 30000
         },
       });
 
-      // Keep track of event handlers to avoid issues with callback references
-      const requestChangeHandler = async (payload: any) => {
+      const requestChangeHandler = async () => {
         if (mountedRef.current && isSubscribed) {
-          console.log('Received request change:', payload.eventType);
+          console.log('Received request change');
           await fetchRequests(true);
         }
       };
 
-      const requesterChangeHandler = async (payload: any) => {
+      const requesterChangeHandler = async () => {
         if (mountedRef.current && isSubscribed) {
-          console.log('Received requester change:', payload.eventType);
+          console.log('Received requester change');
           await fetchRequests(true);
         }
       };
@@ -304,7 +287,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
             setRetryCount(0);
             setError(null);
             
-            // Fetch data after successful subscription
             setTimeout(() => {
               if (mountedRef.current) {
                 fetchRequests(true).catch(console.error);
@@ -348,7 +330,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         setError(error instanceof Error ? error : new Error(String(error)));
         setIsSubscribed(false);
         
-        // Schedule retry with exponential backoff
         if (retryTimeoutRef.current) {
           clearTimeout(retryTimeoutRef.current);
         }
@@ -374,7 +355,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     }
   }, [cleanupChannel, fetchRequests, isSubscribed, retryCount, isOnline]);
 
-  // Handle online/offline events
   useEffect(() => {
     const handleOnline = () => {
       console.log('Network connection restored');
@@ -389,7 +369,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       setIsOnline(false);
       cleanupChannel();
       
-      // Abort any in-flight requests when going offline
       if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
         abortControllerRef.current.abort('Network connection lost');
       }
@@ -404,17 +383,14 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     };
   }, [cleanupChannel, setupRealtimeSubscription, fetchRequests]);
 
-  // Initialize subscription and set up health checks
   useEffect(() => {
     mountedRef.current = true;
     channelIdRef.current = crypto.randomUUID();
 
-    // Initial fetch before subscription setup
     const initFetch = async () => {
       if (!mountedRef.current) return;
       await fetchRequests();
       
-      // Setup subscription after initial fetch
       setTimeout(() => {
         if (mountedRef.current) {
           setupRealtimeSubscription();
@@ -424,21 +400,18 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     
     initFetch().catch(console.error);
 
-    // Set up health check interval
     healthCheckRef.current = setInterval(() => {
       if (mountedRef.current && isOnline) {
         if (!isSubscribed) {
           console.log('Health check: Channel not subscribed, attempting reconnection...');
           setupRealtimeSubscription();
         } else {
-          // Periodically refresh data even if subscribed
           fetchRequests(true).catch(console.error);
         }
       }
     }, HEALTH_CHECK_INTERVAL);
 
     return () => {
-      // Set mounted ref to false FIRST before doing any cleanup
       mountedRef.current = false;
       
       if (retryTimeoutRef.current) {
@@ -449,7 +422,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         clearInterval(healthCheckRef.current);
       }
       
-      // Safely abort any in-flight requests on unmount
       if (abortControllerRef.current) {
         try {
           if (!abortControllerRef.current.signal.aborted) {
@@ -467,18 +439,15 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     };
   }, [setupRealtimeSubscription, cleanupChannel, fetchRequests, isSubscribed, isOnline]);
 
-  // Function to manually reconnect
   const reconnect = useCallback(() => {
     console.log('Manual reconnection requested');
     
-    // Abort any in-flight requests
     if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
       abortControllerRef.current.abort('Manual reconnection requested');
       abortControllerRef.current = null;
     }
     
     cleanupChannel().then(() => {
-      resetCircuitBreaker(REQUESTS_SERVICE_KEY);
       setRetryCount(0);
       setConsecutiveFailures(0);
       channelIdRef.current = crypto.randomUUID();
