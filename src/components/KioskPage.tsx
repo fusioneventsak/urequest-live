@@ -7,7 +7,7 @@ import { Ticker } from './Ticker';
 import { LoadingSpinner } from './shared/LoadingSpinner';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import { UpvoteList } from './UpvoteList';
-import { QRCode } from 'qrcode.react';
+import QRCode from 'qrcode.react';
 import toast from 'react-hot-toast';
 import type { Song, SongRequest } from '../types';
 
