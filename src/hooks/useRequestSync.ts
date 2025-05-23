@@ -257,7 +257,6 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           console.log('Channel disconnected:', event);
           if (mountedRef.current) {
             setIsSubscribed(false);
-            // Auto-reconnect with backoff
             const delay = Math.min(
               INITIAL_RETRY_DELAY * Math.pow(1.5, retryCount),
               MAX_BACKOFF_DELAY
