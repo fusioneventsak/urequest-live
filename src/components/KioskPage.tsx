@@ -31,8 +31,8 @@ export function KioskPage({
   const [searchTerm, setSearchTerm] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
-  const [requesterName, setRequesterName] = useState('');
-  const [message, setMessage] = useState('');
+  const [requestMessage, setRequestMessage] = useState('');
+  const [requestName, setRequestName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { settings } = useUiSettings();
 
@@ -103,12 +103,11 @@ export function KioskPage({
 
   // Handle song request
   const handleRequestSong = async (song: Song) => {
-    if (!requesterName.trim()) {
+    if (!requestName.trim()) {
       setError('Please enter your name before requesting a song');
       return;
     }
 
-    setSelectedSong(song);
     setIsSubmitting(true);
     setError(null);
 
@@ -116,15 +115,16 @@ export function KioskPage({
       const requestData = {
         title: song.title,
         artist: song.artist || '',
-        requestedBy: requesterName.trim(),
-        userPhoto: generateDefaultAvatar(requesterName.trim()),
-        message: message.trim().slice(0, 100) || '',
+        requestedBy: requestName.trim(),
+        userPhoto: generateDefaultAvatar(requestName.trim()),
+        message: requestMessage.trim().slice(0, 100) || '',
       };
 
       const success = await onSubmitRequest(requestData);
       if (success) {
         toast.success('Your request has been added to the queue!');
-        setMessage(''); // Clear the message field after successful submission
+        setRequestMessage(''); // Clear the message field after successful submission
+        setRequestName(''); // Clear the name field after successful submission
       } else {
         throw new Error('Failed to submit request');
       }
@@ -204,22 +204,8 @@ export function KioskPage({
           isActive={!!settings?.custom_message || !!lockedRequest}
         />
 
-        {/* Name input section */}
+        {/* Main content area */}
         <div className="px-6 py-4">
-          <div className="glass-effect rounded-lg p-4 mb-4">
-            <label className="block text-sm font-medium text-white mb-2">
-              Your Name <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={requesterName}
-              onChange={(e) => setRequesterName(e.target.value)}
-              placeholder="Enter your name"
-              className="w-full px-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
-              maxLength={50}
-            />
-          </div>
-
           {error && (
             <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-md p-3 flex items-start">
               <AlertTriangle className="w-5 h-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
@@ -379,18 +365,33 @@ export function KioskPage({
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-white mb-2">
+                    Your Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={requestName}
+                    onChange={(e) => setRequestName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full px-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+                    required
+                    maxLength={50}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-white mb-2">
                     Message for the band (optional, max 100 characters)
                   </label>
                   <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value.slice(0, 100))}
+                    value={requestMessage}
+                    onChange={(e) => setRequestMessage(e.target.value.slice(0, 100))}
                     className="w-full px-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
                     placeholder="Add a message..."
                     rows={2}
                     maxLength={100}
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    {message.length}/100 characters
+                    {requestMessage.length}/100 characters
                   </p>
                 </div>
 
@@ -404,12 +405,12 @@ export function KioskPage({
                   </button>
                   <button
                     onClick={() => handleRequestSong(selectedSong)}
-                    disabled={isSubmitting || !requesterName.trim()}
+                    disabled={isSubmitting || !requestName.trim()}
                     className="px-4 py-2 rounded-lg text-white transition-colors whitespace-nowrap flex items-center space-x-2 disabled:opacity-50"
                     style={{ backgroundColor: accentColor }}
                   >
-                    <Send className="w-4 h-4" />
-                    <span>Submit Request</span>
+                    <Send className="w-4 h-4 mr-2" />
+                    Submit Request
                   </button>
                 </div>
               </div>
