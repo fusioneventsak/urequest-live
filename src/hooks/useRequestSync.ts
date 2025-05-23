@@ -2,6 +2,8 @@ import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase, executeDbOperation } from '../utils/supabase';
 import { cacheService } from '../utils/cache';
 import { executeWithCircuitBreaker } from '../utils/circuitBreaker';
+import { backOff } from 'exponential-backoff';
+import retry from 'retry';
 import type { SongRequest } from '../types';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
@@ -14,6 +16,13 @@ const HEALTH_CHECK_INTERVAL = 30000;
 const RECONNECT_THRESHOLD = 3;
 const JITTER_MAX = 1000;
 const FETCH_TIMEOUT = 30000;
+const BACKOFF_OPTIONS = {
+  numOfAttempts: 5,
+  startingDelay: 1000,
+  timeMultiple: 2,
+  maxDelay: 30000,
+  jitter: 'full'
+};
 
 export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const [isLoading, setIsLoading] = useState(true);
@@ -31,6 +40,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const lastErrorRef = useRef<string>('');
   const fetchPromiseRef = useRef<Promise<void> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const retryOperationRef = useRef<retry.RetryOperation | null>(null);
 
   const createFreshAbortController = useCallback(() => {
     if (abortControllerRef.current) {
@@ -79,6 +89,17 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
 
     lastFetchRef.current = now;
 
+    // Create retry operation
+    if (!retryOperationRef.current) {
+      retryOperationRef.current = retry.operation({
+        retries: 5,
+        factor: 2,
+        minTimeout: 1000,
+        maxTimeout: 30000,
+        randomize: true
+      });
+    }
+
     let signal: AbortSignal;
     try {
       signal = createFreshAbortController();
@@ -94,11 +115,24 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       }
     }, FETCH_TIMEOUT);
 
-    const fetchPromise = (async () => {
+    const fetchPromise = backOff(async () => {
+      if (!mountedRef.current) return;
+
       try {
-        if (!mountedRef.current) return;
         setIsLoading(true);
         setError(null);
+
+        if (!bypassCache && !isOnline) {
+          const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
+          if (cachedRequests?.length > 0) {
+            console.log('Using cached requests (offline)');
+            if (mountedRef.current) {
+              onUpdate(cachedRequests);
+              setIsLoading(false);
+            }
+            return;
+          }
+        }
 
         if (!bypassCache) {
           const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
@@ -190,6 +224,8 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
             setRetryCount(0);
             setConsecutiveFailures(0);
           }
+
+          throw error; // Re-throw for backoff retry
         }
       } finally {
         clearTimeout(timeoutId);
@@ -199,11 +235,11 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         }
         fetchPromiseRef.current = null;
       }
-    })();
+    }, BACKOFF_OPTIONS);
 
     fetchPromiseRef.current = fetchPromise;
     return fetchPromise;
-  }, [onUpdate, consecutiveFailures, cleanupChannel, createFreshAbortController]);
+  }, [onUpdate, consecutiveFailures, cleanupChannel, createFreshAbortController, isOnline]);
 
   const setupRealtimeSubscription = useCallback(async () => {
     if (!mountedRef.current || !isOnline) return;
