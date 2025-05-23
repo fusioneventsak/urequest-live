@@ -131,21 +131,24 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
       if (a.isLocked) return -1;
       if (b.isLocked) return 1;
 
-      // Calculate priority based on requester count only
-      const priorityA = Math.max(a.requesters?.length || 0, 1);
-      const priorityB = Math.max(b.requesters?.length || 0, 1);
+      // Calculate priority based on requester count AND votes
+      const priorityA = (a.requesters?.length || 0) + (a.votes || 0);
+      const priorityB = (b.requesters?.length || 0) + (b.votes || 0);
 
-      // First compare priority (requester count)
+      // First compare priority (requester count + upvotes)
       if (priorityA !== priorityB) {
         return priorityB - priorityA;
       }
       
-      // If priority is the same, then use votes as a secondary sort
-      if (a.votes !== b.votes) {
-        return b.votes - a.votes;
+      // If priority is the same, then compare requester count
+      const requestersA = a.requesters?.length || 0;
+      const requestersB = b.requesters?.length || 0;
+      
+      if (requestersA !== requestersB) {
+        return requestersB - requestersA;
       }
-
-      // If votes are also the same, sort by timestamp (most recent first)
+      
+      // If requester counts are also the same, sort by timestamp (most recent first)
       const latestA = Math.max(...(a.requesters?.length ? a.requesters.map(r => new Date(r.timestamp).getTime()) : [new Date(a.createdAt).getTime()]));
       const latestB = Math.max(...(b.requesters?.length ? b.requesters.map(r => new Date(r.timestamp).getTime()) : [new Date(b.createdAt).getTime()]));
       return latestB - latestA;
@@ -201,7 +204,7 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
         <h2 className="text-xl font-semibold neon-text">Request Queue</h2>
         <div className="flex items-center space-x-4">
           <div className="text-sm text-gray-400">
-            Priority = Number of Requesters
+            Priority = Requesters + Upvotes
           </div>
           {onResetQueue && (
             <button
@@ -225,6 +228,8 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
           const hasRequesters = Array.isArray(request.requesters) && request.requesters.length > 0;
           // Get actual requester count, ensuring it's at least 1
           const requesterCount = Math.max(hasRequesters ? request.requesters.length : 0, 1);
+          // Calculate priority as sum of requesters and votes
+          const priority = requesterCount + (request.votes || 0);
           // Check if this request is currently expanded
           const isExpanded = expandedRequests.has(request.id);
           
@@ -262,7 +267,7 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
                         <span>{request.votes || 0}</span>
                       </div>
                       <div className="text-xs text-neon-pink">
-                        Priority: {requesterCount}
+                        Priority: {priority}
                       </div>
                     </div>
                   </div>
