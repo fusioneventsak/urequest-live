@@ -1,3 +1,4 @@
+// src/utils/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -46,20 +47,24 @@ export async function executeDbOperation<T>(
     }
 
     // Check network status
-    if (!navigator.onLine) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
       throw new Error('No network connection available');
     }
 
     // Add timeout protection
     const operationPromise = operation();
+    
     if (signal) {
       // Create a race between the operation and the abort signal
       const abortPromise = new Promise<T>((_, reject) => {
-        signal.addEventListener('abort', () => {
+        const abortHandler = () => {
           const abortError = new Error('Operation aborted');
           abortError.name = 'AbortError';
           reject(abortError);
-        }, { once: true });
+        };
+        
+        // Use addEventListener with once option to prevent memory leaks
+        signal.addEventListener('abort', abortHandler, { once: true });
       });
       
       // Use Promise.race to handle whichever resolves/rejects first
@@ -69,7 +74,8 @@ export async function executeDbOperation<T>(
     }
   } catch (error: any) {
     // Handle AbortError silently - this is expected when component unmounts
-    if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+    if (error.name === 'AbortError' || error.message?.includes('aborted') || 
+        error.message?.includes('Component unmounted')) {
       console.log(`Request aborted for ${operationKey}`);
       return { data: null, error: null } as unknown as T;
     }
@@ -90,7 +96,7 @@ export async function executeDbOperation<T>(
     if (error.message?.includes('network') || 
         error.name === 'NetworkError' || 
         error.message?.includes('fetch') || 
-        !navigator.onLine) {
+        (typeof navigator !== 'undefined' && !navigator.onLine)) {
       console.error(`Network error during operation: ${operationKey}`);
       throw new Error(`Network error: ${error.message || 'Failed to connect to server'}`);
     }
