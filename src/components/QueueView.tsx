@@ -24,6 +24,11 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
   const [expandedRequests, setExpandedRequests] = useState<Set<string>>(new Set());
   const [isResetting, setIsResetting] = useState(false);
   
+  // Debug log when requests change
+  useEffect(() => {
+    console.log('🔄 QueueView requests updated:', requests.length, requests.map(r => r.id));
+  }, [requests]);
+  
   const { settings } = useUiSettings();
   const accentColor = settings?.frontend_accent_color || '#ff00ff';
   
@@ -131,6 +136,10 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
       if (a.isLocked) return -1;
       if (b.isLocked) return 1;
 
+      // Locked requests always go first
+      if (a.isLocked) return -1;
+      if (b.isLocked) return 1;
+
       // Calculate priority based on requester count AND votes
       const priorityA = (a.requesters?.length || 0) + (a.votes || 0);
       const priorityB = (b.requesters?.length || 0) + (b.votes || 0);
@@ -159,6 +168,21 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
     setLockingStates(prev => new Set([...prev, id]));
     
     try {
+      // First unlock all other requests
+      const { error: unlockError } = await supabase
+        .from('requests')
+        .update({ is_locked: false })
+        .neq('id', id);
+      
+      if (unlockError) throw unlockError;
+      
+      // Get the current request
+      const request = requests.find(r => r.id === id);
+      if (!request) throw new Error('Request not found');
+      
+      // Then toggle this request's lock status
+      const newLockState = !request.isLocked;
+      
       await onLockRequest(id);
     } finally {
       setTimeout(() => {

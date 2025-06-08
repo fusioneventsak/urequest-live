@@ -16,7 +16,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const requestsSubscriptionRef = useRef<string | null>(null);
   const requestersSubscriptionRef = useRef<string | null>(null);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fetchInProgressRef = useRef(false);
+  const fetchInProgressRef = useRef<boolean>(false);
 
   // Fetch requests with simple error handling
   const fetchRequests = useCallback(async (bypassCache = false) => {
@@ -48,7 +48,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       }
 
       // Fetch requests with requesters
-      console.log('Fetching requests with requesters...');
+      console.log('🔄 Fetching requests with requesters...');
       const { data: requestsData, error: requestsError } = await supabase
         .from('requests')
         .select(`
@@ -74,6 +74,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       }
 
       if (mountedRef.current) {
+        console.log('✅ Fetched requests:', requestsData.length);
         const formattedRequests = requestsData.map(request => ({
           id: request.id,
           title: request.title,
@@ -92,12 +93,17 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
           }))
         }));
 
+        // Clear cache and update with fresh data
+        if (bypassCache) {
+          cacheService.del(REQUESTS_CACHE_KEY);
+        }
+        
         cacheService.setRequests(REQUESTS_CACHE_KEY, formattedRequests);
         onUpdate(formattedRequests);
         setRetryCount(0); // Reset retry count on success
       }
     } catch (error) {
-      console.error('Error fetching requests:', error);
+      console.error('❌ Error fetching requests:', error);
       
       if (mountedRef.current) {
         setError(error instanceof Error ? error : new Error(String(error)));
@@ -142,13 +148,13 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     RealtimeManager.init();
     
     // Setup subscriptions
-    const setupSubscriptions = async () => {
+    const setupSubscriptions = () => {
       try {
         // Subscribe to requests table
         const requestsSub = RealtimeManager.createSubscription(
           'requests',
           (payload) => {
-            console.log('Requests changed:', payload.eventType);
+            console.log('🔔 Requests changed:', payload.eventType);
             fetchRequests(true);
           }
         );
@@ -157,7 +163,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         const requestersSub = RealtimeManager.createSubscription(
           'requesters',
           (payload) => {
-            console.log('Requesters changed:', payload.eventType);
+            console.log('🔔 Requesters changed:', payload.eventType);
             fetchRequests(true);
           }
         );
@@ -222,13 +228,13 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     RealtimeManager.reconnect();
     
     // Setup new subscriptions
-    const setupSubscriptions = async () => {
+    const setupSubscriptions = () => {
       try {
         // Subscribe to requests table
         const requestsSub = RealtimeManager.createSubscription(
           'requests',
           (payload) => {
-            console.log('Requests changed:', payload.eventType);
+            console.log('🔔 Requests changed:', payload.eventType);
             fetchRequests(true);
           }
         );
@@ -237,7 +243,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         const requestersSub = RealtimeManager.createSubscription(
           'requesters',
           (payload) => {
-            console.log('Requesters changed:', payload.eventType);
+            console.log('🔔 Requesters changed:', payload.eventType);
             fetchRequests(true);
           }
         );
@@ -255,9 +261,9 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     fetchRequests(true);
   }, [fetchRequests]);
 
-  return { 
-    isLoading, 
-    error, 
+  return {
+    isLoading,
+    error,
     refetch: () => fetchRequests(true),
     reconnect
   };

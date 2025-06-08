@@ -94,6 +94,7 @@ export const RealtimeManager = {
         filter || { event: '*', schema: 'public', table },
         (payload) => {
           try {
+            console.log(`🔔 ${table} table changed:`, payload.eventType);
             callback(payload);
           } catch (error) {
             console.error(`Error in subscription callback (${channelId}):`, error);
@@ -134,6 +135,9 @@ export const RealtimeManager = {
    */
   addConnectionListener: (listener) => {
     connectionListeners.add(listener);
+    
+    // Return current state immediately
+    listener(connectionState);
   },
 
   /**
