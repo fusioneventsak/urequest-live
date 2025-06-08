@@ -1,11 +1,10 @@
+// src/hooks/useRequestSync.ts
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase, executeDbOperation } from '../utils/supabase';
 import { cacheService } from '../utils/cache';
 import { executeWithCircuitBreaker, resetCircuitBreaker } from '../utils/circuitBreaker';
 import { nanoid } from 'nanoid';
 import type { SongRequest } from '../types';
-import { backOff } from 'exponential-backoff';
-import retry from 'retry';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
 const REQUESTS_SERVICE_KEY = 'requests';
@@ -26,9 +25,9 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   const mountedRef = useRef(true);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const retryTimeoutRef = useRef<NodeJS.Timeout>();
-  const healthCheckRef = useRef<NodeJS.Timeout>();
+  const channelRef = useRef<any>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const healthCheckRef = useRef<NodeJS.Timeout | null>(null);
   const channelIdRef = useRef<string>(nanoid());
   const lastFetchRef = useRef<number>(0);
   const lastErrorRef = useRef<string>('');
@@ -61,11 +60,26 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     if (channelRef.current) {
       try {
         console.log('Cleaning up request sync channel...');
-        await channelRef.current.unsubscribe();
-        await supabase.removeChannel(channelRef.current);
+        
+        // Safely unsubscribe from the channel
+        try {
+          await channelRef.current.unsubscribe();
+        } catch (unsubError) {
+          console.warn('Error unsubscribing from channel:', unsubError);
+          // Continue with removal even if unsubscribe fails
+        }
+        
+        // Remove the channel from Supabase
+        try {
+          await supabase.removeChannel(channelRef.current);
+        } catch (removeError) {
+          console.warn('Error removing channel:', removeError);
+          // If removal fails, we'll still set channel to null to prevent further issues
+        }
       } catch (err) {
-        console.warn('Error cleaning up channel:', err);
+        console.warn('Error in channel cleanup:', err);
       } finally {
+        // Always ensure we clear references and states
         channelRef.current = null;
         setIsSubscribed(false);
         subscribedRef.current = false;
@@ -252,132 +266,113 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       const channelId = `requests-${channelIdRef.current}`;
       console.log(`Setting up new request sync channel: ${channelId}`);
 
-      const newChannel = supabase.channel(channelId, {
-        config: {
-          broadcast: { self: true },
-          presence: { key: channelId },
-          retryAfter: INITIAL_RETRY_DELAY,
-          timeout: 30000 // 30 seconds
-        },
-      });
+      try {
+        const newChannel = supabase.channel(channelId, {
+          config: {
+            broadcast: { self: true },
+            presence: { key: channelId },
+          },
+        });
 
-      // Keep track of event handlers to avoid issues with callback references
-      const requestChangeHandler = async (payload: any) => {
-        console.log('Received request change:', payload.eventType);
-        if (mountedRef.current && subscribedRef.current) {
+        // Keep track of event handlers to avoid issues with callback references
+        const requestChangeHandler = async (payload: any) => {
+          if (!mountedRef.current || !subscribedRef.current) return;
+          
+          console.log('Received request change:', payload.eventType);
           try {
             await fetchRequests(true);
           } catch (err) {
             console.error('Error handling request change:', err);
           }
-        }
-      };
+        };
 
-      const requesterChangeHandler = async (payload: any) => {
-        console.log('Received requester change:', payload.eventType);
-        if (mountedRef.current && subscribedRef.current) {
+        const requesterChangeHandler = async (payload: any) => {
+          if (!mountedRef.current || !subscribedRef.current) return;
+          
+          console.log('Received requester change:', payload.eventType);
           try {
             await fetchRequests(true);
           } catch (err) {
             console.error('Error handling requester change:', err);
           }
-        }
-      };
+        };
 
-      newChannel
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'requests' },
-          requestChangeHandler
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'requesters' },
-          requesterChangeHandler
-        )
-        .on('error', (err) => {
-          console.error('Channel error:', err);
-          lastErrorRef.current = err.message || 'Unknown error';
-        })
-        .on('system', (event) => {
-          console.log('Channel system event:', event);
-        })
-        .on('disconnect', (event) => {
-          console.log('Channel disconnected:', event);
-          setIsSubscribed(false);
-          subscribedRef.current = false;
-          
-          if (mountedRef.current && isOnline) {
-            // Auto-reconnect with backoff
-            const delay = Math.min(
-              INITIAL_RETRY_DELAY * Math.pow(1.5, retryCount),
-              MAX_BACKOFF_DELAY
+        // Proper error handling for channel subscription
+        try {
+          newChannel
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'requests' },
+              requestChangeHandler
+            )
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'requesters' },
+              requesterChangeHandler
             );
-            
-            if (retryTimeoutRef.current) {
-              clearTimeout(retryTimeoutRef.current);
-            }
-            
-            retryTimeoutRef.current = setTimeout(() => {
-              if (mountedRef.current) {
-                setRetryCount(prev => prev + 1);
-                channelIdRef.current = nanoid();
-                setupRealtimeSubscription();
-              }
-            }, delay);
-          }
-        })
-        .subscribe(async (status, err) => {
-          if (!mountedRef.current) return;
+          
+          channelRef.current = newChannel;
+          
+          // Subscribe with a status handler
+          newChannel.subscribe((status, err) => {
+            if (!mountedRef.current) return;
 
-          console.log(`Channel ${channelId} status: ${status}`);
+            console.log(`Channel ${channelId} status: ${status}`);
 
-          if (status === 'SUBSCRIBED') {
-            channelRef.current = newChannel;
-            setIsSubscribed(true);
-            subscribedRef.current = true;
-            setRetryCount(0);
-            setError(null);
-            
-            // Fetch data after successful subscription
-            setTimeout(() => {
-              if (mountedRef.current) {
-                fetchRequests(true).catch(console.error);
-              }
-            }, 1000);
-          } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-            console.error(`Channel ${status.toLowerCase()}:`, err);
-            setIsSubscribed(false);
-            subscribedRef.current = false;
-            channelRef.current = null;
-
-            if (retryTimeoutRef.current) {
-              clearTimeout(retryTimeoutRef.current);
-            }
-
-            if (retryCount < MAX_RETRY_ATTEMPTS && isOnline && mountedRef.current) {
-              const backoff = Math.min(
-                INITIAL_RETRY_DELAY * Math.pow(2, retryCount),
-                MAX_BACKOFF_DELAY
-              );
-              const jitter = Math.floor(Math.random() * JITTER_MAX);
-              const delay = backoff + jitter;
-
-              console.log(`Reconnecting in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
-
-              retryTimeoutRef.current = setTimeout(() => {
+            if (status === 'SUBSCRIBED') {
+              setIsSubscribed(true);
+              subscribedRef.current = true;
+              setRetryCount(0);
+              setError(null);
+              
+              // Fetch data after successful subscription
+              setTimeout(() => {
                 if (mountedRef.current) {
-                  setRetryCount(prev => prev + 1);
-                  channelIdRef.current = nanoid();
-                  setupRealtimeSubscription();
+                  fetchRequests(true).catch(console.error);
                 }
-              }, delay);
-            } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
-              const errorMessage = `Maximum retry attempts reached. Last error: ${lastErrorRef.current}`;
-              setError(new Error(errorMessage));
+              }, 1000);
+            } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+              console.error(`Channel ${status.toLowerCase()}:`, err);
+              setIsSubscribed(false);
+              subscribedRef.current = false;
+              channelRef.current = null;
+
+              if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+                retryTimeoutRef.current = null;
+              }
+
+              if (retryCount < MAX_RETRY_ATTEMPTS && isOnline && mountedRef.current) {
+                const backoff = Math.min(
+                  INITIAL_RETRY_DELAY * Math.pow(2, retryCount),
+                  MAX_BACKOFF_DELAY
+                );
+                const jitter = Math.floor(Math.random() * JITTER_MAX);
+                const delay = backoff + jitter;
+
+                console.log(`Reconnecting in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+
+                retryTimeoutRef.current = setTimeout(() => {
+                  if (mountedRef.current) {
+                    setRetryCount(prev => prev + 1);
+                    channelIdRef.current = nanoid();
+                    setupRealtimeSubscription();
+                  }
+                }, delay);
+              } else if (retryCount >= MAX_RETRY_ATTEMPTS) {
+                const errorMessage = `Maximum retry attempts reached. Last error: ${lastErrorRef.current}`;
+                setError(new Error(errorMessage));
+              }
             }
-          }
-        });
+          });
+        } catch (subscribeError) {
+          console.error('Error during channel subscription:', subscribeError);
+          throw subscribeError;
+        }
+      } catch (channelError) {
+        console.error('Error creating channel:', channelError);
+        throw channelError;
+      }
     } catch (error) {
       console.error('Error in setupRealtimeSubscription:', error);
       setError(error instanceof Error ? error : new Error(String(error)));
@@ -387,6 +382,7 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       // Schedule retry with exponential backoff
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
       }
       
       if (retryCount < MAX_RETRY_ATTEMPTS && mountedRef.current) {
@@ -461,6 +457,10 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     initFetch().catch(console.error);
 
     // Set up health check interval
+    if (healthCheckRef.current) {
+      clearInterval(healthCheckRef.current);
+    }
+    
     healthCheckRef.current = setInterval(() => {
       if (mountedRef.current && isOnline) {
         if (!isSubscribed || !subscribedRef.current) {
@@ -480,10 +480,12 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
       }
       
       if (healthCheckRef.current) {
         clearInterval(healthCheckRef.current);
+        healthCheckRef.current = null;
       }
       
       // Safely abort any in-flight requests on unmount
