@@ -3,14 +3,14 @@
  */
 
 // Cache TTL (Time To Live) settings in seconds
-const DEFAULT_TTL = 5 * 60; // 5 minutes
-const SONGS_TTL = 30 * 60; // 30 minutes
+const DEFAULT_TTL = 60; // 1 minute
+const SONGS_TTL = 300; // 5 minutes
 const REQUESTS_TTL = 30; // 30 seconds
-const SET_LISTS_TTL = 15 * 60; // 15 minutes
+const SET_LISTS_TTL = 300; // 5 minutes
 
 // Cache size limits
-const MAX_CACHE_SIZE = 100; // Maximum number of items in cache
-const MAX_CACHE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB limit
+const MAX_CACHE_SIZE = 50; // Maximum number of items in cache
+const MAX_CACHE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB limit
 
 // Cache item structure
 interface CacheItem<T> {

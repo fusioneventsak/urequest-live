@@ -1,48 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { RealtimeManager } from '../utils/realtimeManager';
 
 interface ConnectionStatusProps {
   showDetails?: boolean;
-  className?: string;
   showReconnectButton?: boolean;
+  className?: string;
 }
 
 export function ConnectionStatus({ 
   showDetails = false, 
-  className = '',
-  showReconnectButton = true
+  showReconnectButton = true,
+  className = ''
 }: ConnectionStatusProps) {
-  const [connectionStatus, setConnectionStatus] = useState<string>('disconnected');
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [lastReconnectTime, setLastReconnectTime] = useState<Date | null>(null);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const [connectionStatus, setConnectionStatus] = React.useState<string>(
+    RealtimeManager.getConnectionState()
+  );
+  const [isConnecting, setIsConnecting] = React.useState(false);
+  const [hasError, setHasError] = React.useState(false);
+  const [error, setError] = React.useState<Error | null>(null);
+  const [lastReconnectTime, setLastReconnectTime] = React.useState<Date | null>(null);
 
-  // Set up connection status listener
-  useEffect(() => {
-    const listenerId = `connection-listener-${Math.random().toString(36).substring(2, 9)}`;
-    
+  // Listen for connection status changes
+  React.useEffect(() => {
     const handleConnectionChange = (status: string, err?: Error) => {
       setConnectionStatus(status);
       setIsConnecting(status === 'connecting');
+      setHasError(status === 'error');
       
       if (err) {
         setError(err);
       } else if (status === 'connected') {
         setError(null);
       }
-      
-      if (status === 'connecting') {
-        setLastReconnectTime(new Date());
-        setConnectionAttempts(prev => prev + 1);
-      } else if (status === 'connected') {
-        setConnectionAttempts(0);
-      }
     };
     
-    // Initial status
-    setConnectionStatus(RealtimeManager.isConnected() ? 'connected' : 'disconnected');
+    // Get initial status
+    handleConnectionChange(RealtimeManager.getConnectionState());
     
     // Add listener
     RealtimeManager.addConnectionListener(handleConnectionChange);
@@ -52,7 +46,7 @@ export function ConnectionStatus({
     };
   }, []);
 
-  // Handle reconnect
+  // Handle reconnect button click
   const handleReconnect = () => {
     setIsConnecting(true);
     setLastReconnectTime(new Date());
@@ -96,7 +90,7 @@ export function ConnectionStatus({
               <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
               <span className="font-medium">Connecting...</span>
             </div>
-          ) : connectionStatus === 'error' ? (
+          ) : hasError ? (
             <div className="flex items-center text-red-400">
               <AlertTriangle className="w-5 h-5 mr-2" />
               <span className="font-medium">Connection Error</span>
@@ -125,7 +119,7 @@ export function ConnectionStatus({
         )}
       </div>
       
-      {error && (
+      {hasError && error && (
         <div className="mt-2 px-3 py-2 bg-red-500/10 rounded text-red-400 text-xs">
           {error.message}
         </div>
@@ -134,7 +128,6 @@ export function ConnectionStatus({
       {lastReconnectTime && (
         <div className="mt-1 text-xs text-gray-400">
           Last reconnect attempt: {lastReconnectTime.toLocaleTimeString()}
-          {connectionAttempts > 0 && ` (Attempt ${connectionAttempts})`}
         </div>
       )}
     </div>
