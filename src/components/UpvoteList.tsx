@@ -3,6 +3,7 @@ import { Music4, ThumbsUp, UserCircle } from 'lucide-react';
 import { useUiSettings } from '../hooks/useUiSettings';
 import { supabase } from '../utils/supabase';
 import type { SongRequest } from '../types';
+import toast from 'react-hot-toast';
 
 interface UpvoteListProps {
   requests: SongRequest[];
@@ -122,11 +123,16 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
       // Update local voted state
       setVotedRequests(prev => new Set([...prev, id]));
       
-      // Make the actual API call
-      const success = await onVote(id);
-      
-      if (!success) {
-        // Revert optimistic updates on failure
+      // Make the actual API call using the atomic function
+      const { data, error } = await supabase.rpc('add_vote', {
+        p_request_id: id,
+        p_user_id: currentUserId
+      });
+
+      if (error) throw error;
+
+      if (data === false) {
+        // Already voted - revert optimistic updates
         setOptimisticVotes(prev => {
           const newMap = new Map(prev);
           newMap.delete(id);
@@ -138,6 +144,8 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
           newSet.delete(id);
           return newSet;
         });
+        
+        toast.error('You have already voted for this request');
       }
     } catch (error) {
       console.error('Error recording vote:', error);
@@ -154,6 +162,8 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
         newSet.delete(id);
         return newSet;
       });
+      
+      toast.error('Failed to vote. Please try again.');
     }
   };
 

@@ -6,6 +6,7 @@ let connectionState = 'disconnected';
 let isConnecting = false;
 const activeChannels = new Map();
 const connectionListeners = new Set();
+const updateTimeouts = new Map();
 
 // Client identifier
 const CLIENT_ID = nanoid(8);
@@ -79,14 +80,21 @@ export const RealtimeManager = {
   },
 
   /**
-   * Create a subscription to a table
+   * Create a subscription to a table with optimized event handling
    */
   createSubscription: (table, callback, filter) => {
     const channelId = `${table}_${nanoid(6)}`;
     
     try {
-      // Create channel
-      const channel = supabase.channel(channelId);
+      // Create channel with optimized config
+      const channel = supabase.channel(channelId, {
+        config: {
+          presence: { key: CLIENT_ID },
+          broadcast: { self: false },
+          // Reduce event frequency to prevent overwhelming clients
+          params: { eventsPerSecond: 8 }
+        }
+      });
       
       // Configure channel
       channel.on(
@@ -95,7 +103,12 @@ export const RealtimeManager = {
         (payload) => {
           try {
             console.log(`🔔 ${table} table changed:`, payload.eventType);
-            callback(payload);
+            
+            // Debounce rapid updates for the same table
+            clearTimeout(updateTimeouts.get(channelId));
+            updateTimeouts.set(channelId, setTimeout(() => {
+              callback(payload);
+            }, 50)); // 50ms debounce
           } catch (error) {
             console.error(`Error in subscription callback (${channelId}):`, error);
           }
@@ -125,6 +138,10 @@ export const RealtimeManager = {
       await channelInfo.channel.unsubscribe();
       supabase.removeChannel(channelInfo.channel);
       activeChannels.delete(channelId);
+      
+      // Clear any pending timeouts for this channel
+      clearTimeout(updateTimeouts.get(channelId));
+      updateTimeouts.delete(channelId);
     } catch (error) {
       console.warn(`Error removing subscription ${channelId}:`, error);
     }
@@ -145,27 +162,6 @@ export const RealtimeManager = {
    */
   removeConnectionListener: (listener) => {
     connectionListeners.delete(listener);
-  },
-
-  /**
-   * Add a listener with ID
-   */
-  addListener: (_, listener) => {
-    // Store listener with ID for later removal
-    connectionListeners.add(listener);
-    
-    // Return current state immediately
-    listener(connectionState);
-    
-    return null;
-  },
-
-  /**
-   * Remove a listener by ID
-   */
-  removeListener: (_) => {
-    // Since we don't actually store by ID, this is a no-op
-    // In a real implementation, we would remove the specific listener
   },
 
   /**
@@ -191,6 +187,10 @@ export const RealtimeManager = {
       try {
         await info.channel.unsubscribe();
         supabase.removeChannel(info.channel);
+        
+        // Clear any pending timeouts
+        clearTimeout(updateTimeouts.get(id));
+        updateTimeouts.delete(id);
       } catch (error) {
         console.warn(`Error closing channel ${id}:`, error);
       }
@@ -211,6 +211,10 @@ export const RealtimeManager = {
       try {
         await info.channel.unsubscribe();
         supabase.removeChannel(info.channel);
+        
+        // Clear any pending timeouts
+        clearTimeout(updateTimeouts.get(id));
+        updateTimeouts.delete(id);
       } catch (error) {
         console.warn(`Error closing channel ${id}:`, error);
       }
