@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { RealtimeManager } from '../utils/realtimeManager';
 
@@ -13,14 +13,14 @@ export function ConnectionStatus({
   className = '',
   showReconnectButton = true
 }: ConnectionStatusProps) {
-  const [connectionStatus, setConnectionStatus] = React.useState<string>('disconnected');
-  const [isConnecting, setIsConnecting] = React.useState(false);
-  const [error, setError] = React.useState<Error | null>(null);
-  const [lastReconnectTime, setLastReconnectTime] = React.useState<Date | null>(null);
-  const [connectionAttempts, setConnectionAttempts] = React.useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<string>('disconnected');
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [lastReconnectTime, setLastReconnectTime] = useState<Date | null>(null);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
 
   // Set up connection status listener
-  React.useEffect(() => {
+  useEffect(() => {
     const listenerId = `connection-listener-${Math.random().toString(36).substring(2, 9)}`;
     
     const handleConnectionChange = (status: string, err?: Error) => {

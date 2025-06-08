@@ -970,6 +970,11 @@ function App() {
               <p className="text-gray-300 max-w-2xl mt-2 mb-4">
                 Manage your set lists, song library, and customize the request system all in one place.
               </p>
+              
+              {/* Show the connection status */}
+              <ErrorBoundary>
+                <ConnectionStatus showDetails={true} />
+              </ErrorBoundary>
             </header>
 
             <BackendTabs 
