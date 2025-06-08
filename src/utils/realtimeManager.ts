@@ -150,20 +150,20 @@ export const RealtimeManager = {
   /**
    * Add a listener with ID
    */
-  addListener: (id, listener) => {
+  addListener: (_, listener) => {
     // Store listener with ID for later removal
     connectionListeners.add(listener);
     
     // Return current state immediately
     listener(connectionState);
     
-    return id;
+    return null;
   },
 
   /**
    * Remove a listener by ID
    */
-  removeListener: (id) => {
+  removeListener: (_) => {
     // Since we don't actually store by ID, this is a no-op
     // In a real implementation, we would remove the specific listener
   },

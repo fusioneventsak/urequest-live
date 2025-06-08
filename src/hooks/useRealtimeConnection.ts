@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { RealtimeManager } from '../utils/realtimeManager';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Hook to track and manage Supabase realtime connection status
@@ -13,10 +12,9 @@ export function useRealtimeConnection() {
   const [lastReconnectTime, setLastReconnectTime] = useState<Date | null>(null);
 
   useEffect(() => {
-    const listenerId = `connection-listener-${uuidv4()}`;
     
     // Register listener for connection status updates
-    RealtimeManager.addListener(listenerId, (status, err) => {
+    const handleConnectionChange = (status: string, err?: Error) => {
       setConnectionStatus(status);
       
       if (err) {
@@ -28,11 +26,13 @@ export function useRealtimeConnection() {
       if (status === 'connecting') {
         setLastReconnectTime(new Date());
       }
-    });
+    };
+    
+    RealtimeManager.addConnectionListener(handleConnectionChange);
     
     // Cleanup on unmount
     return () => {
-      RealtimeManager.removeListener(listenerId);
+      RealtimeManager.removeConnectionListener(handleConnectionChange);
     };
   }, []);
   

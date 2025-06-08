@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { LayoutDashboard, Users, Music as BookMusic, ListMusic, Cog, Settings } from 'lucide-react';
-import { ConnectionStatus } from './ConnectionStatus';
 
 type TabId = 'requests' | 'setlists' | 'songs' | 'settings';
 
@@ -63,9 +62,6 @@ export function BackendTabs({ activeTab, onTabChange }: BackendTabsProps) {
               )}
             </button>
           ))}
-          <div className="ml-auto px-4 flex items-center">
-            <ConnectionStatus />
-          </div>
         </div>
         
         {/* Mobile tabs */}
@@ -89,9 +85,6 @@ export function BackendTabs({ activeTab, onTabChange }: BackendTabsProps) {
               )}
             </button>
           ))}
-          <div className="md:hidden mt-2 px-4 py-1 flex justify-end">
-            <ConnectionStatus />
-          </div>
         </div>
       </div>
     </div>

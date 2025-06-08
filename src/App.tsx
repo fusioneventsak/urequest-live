@@ -5,7 +5,6 @@ import { UserFrontend } from './components/UserFrontend';
 import { BackendLogin } from './components/BackendLogin';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
-import { ConnectionStatus } from './components/ConnectionStatus';
 import { useUiSettings } from './hooks/useUiSettings';
 import { useSongSync } from './hooks/useSongSync';
 import { useRequestSync } from './hooks/useRequestSync';
@@ -971,11 +970,6 @@ function App() {
               <p className="text-gray-300 max-w-2xl mt-2 mb-4">
                 Manage your set lists, song library, and customize the request system all in one place.
               </p>
-              
-              {/* Show the connection status */}
-              <ErrorBoundary>
-                <ConnectionStatus showDetails={true} />
-              </ErrorBoundary>
             </header>
 
             <BackendTabs 
