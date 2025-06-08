@@ -1,4 +1,14 @@
 // ... (previous imports remain the same)
+// In App.tsx, add at the top of the component:
+useEffect(() => {
+  // Initialize single realtime connection for the app
+  RealtimeManager.init();
+  
+  return () => {
+    // Clean up all subscriptions on app unmount
+    RealtimeManager.cleanup();
+  };
+}, []);
 
 const handleSubmitRequest = useCallback(async (data: RequestFormData): Promise<boolean> => {
   console.log('Submitting request:', data);
