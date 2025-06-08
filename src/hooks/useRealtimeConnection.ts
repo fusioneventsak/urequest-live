@@ -1,112 +1,54 @@
-import { useState, useEffect, useCallback } from 'react';
-import { RealtimeManager } from '../utils/realtimeManager';
+import { useState, useEffect } from 'react';
+import { realtimeManager } from '../utils/realtimeManager';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Custom hook for managing the global Supabase realtime connection
- * with improved error handling and reconnection logic
+ * Hook to track and manage Supabase realtime connection status
  */
 export function useRealtimeConnection() {
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<string>(
+    realtimeManager.getConnectionState()
+  );
   const [error, setError] = useState<Error | null>(null);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
-  
-  // Initialize connection
-  const initialize = useCallback(async () => {
-    setIsConnecting(true);
-    setError(null);
-    
-    try {
-      const connected = await RealtimeManager.init();
-      setIsConnected(connected);
-      
-      if (!connected) {
-        setConnectionAttempts(prev => prev + 1);
-      } else {
-        setConnectionAttempts(0);
-      }
-    } catch (error) {
-      console.error('Error initializing realtime connection:', error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      setIsConnected(false);
-    } finally {
-      setIsConnecting(false);
-    }
-  }, []);
-  
-  // Force reconnection
-  const reconnect = useCallback(async () => {
-    setIsConnecting(true);
-    setError(null);
-    
-    try {
-      const connected = await RealtimeManager.reconnect();
-      setIsConnected(connected);
-      
-      if (connected) {
-        setConnectionAttempts(0);
-      } else {
-        setConnectionAttempts(prev => prev + 1);
-      }
-      
-      return connected;
-    } catch (error) {
-      console.error('Error reconnecting:', error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      setIsConnected(false);
-      return false;
-    } finally {
-      setIsConnecting(false);
-    }
-  }, []);
-  
-  // Setup connection listener
+  const [lastReconnectTime, setLastReconnectTime] = useState<Date | null>(null);
+
   useEffect(() => {
-    const handleConnectionEvent = (event: string) => {
-      if (event === 'connected') {
-        setIsConnected(true);
-        setConnectionAttempts(0);
+    const listenerId = `connection-listener-${uuidv4()}`;
+    
+    // Register listener for connection status updates
+    realtimeManager.addListener(listenerId, (status, err) => {
+      setConnectionStatus(status);
+      
+      if (err) {
+        setError(err);
+      } else if (status === 'connected') {
         setError(null);
-      } else if (event === 'disconnected') {
-        setIsConnected(false);
-      } else if (event === 'max_attempts_reached') {
-        setError(new Error('Maximum connection attempts reached'));
       }
-    };
+      
+      if (status === 'connecting') {
+        setLastReconnectTime(new Date());
+      }
+    });
     
-    RealtimeManager.addConnectionListener(handleConnectionEvent);
-    
-    // Initial connection
-    initialize();
-    
-    // Setup network event listeners
-    const handleOnline = () => {
-      console.log('Network online, reconnecting...');
-      reconnect();
-    };
-    
-    const handleOffline = () => {
-      console.log('Network offline');
-      setIsConnected(false);
-    };
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    // Cleanup
+    // Cleanup on unmount
     return () => {
-      RealtimeManager.removeConnectionListener(handleConnectionEvent);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      realtimeManager.removeListener(listenerId);
     };
-  }, [initialize, reconnect]);
+  }, []);
+  
+  // Function to manually trigger reconnection
+  const reconnect = () => {
+    realtimeManager.reconnect();
+    setLastReconnectTime(new Date());
+  };
   
   return {
-    isConnected,
-    isConnecting,
+    connectionStatus,
+    isConnected: connectionStatus === 'connected',
+    isConnecting: connectionStatus === 'connecting',
+    hasError: connectionStatus === 'error',
     error,
-    connectionAttempts,
-    reconnect,
-    initialize
+    lastReconnectTime,
+    reconnect
   };
 }
