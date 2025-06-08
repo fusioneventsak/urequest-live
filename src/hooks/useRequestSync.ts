@@ -1,60 +1,97 @@
-// src/hooks/useSongSync.ts
+// src/hooks/useRequestSync.ts
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { cacheService } from '../utils/cache';
 import { RealtimeManager } from '../utils/realtimeManager';
-import type { Song } from '../types';
+import type { SongRequest } from '../types';
 
-const SONGS_CACHE_KEY = 'songs:all';
-const FALLBACK_POLLING_INTERVAL = 30000; // Only used when realtime fails
+const REQUESTS_CACHE_KEY = 'requests:all';
+const FALLBACK_POLLING_INTERVAL = 5000; // Faster polling for requests
 
-export function useSongSync(onUpdate: (songs: Song[]) => void) {
+export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [isRealtime, setIsRealtime] = useState(false);
-  const subscriptionIdRef = useRef<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const requestsSubscriptionRef = useRef<string | null>(null);
+  const requestersSubscriptionRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
   const pollingIntervalRef = useRef<number | null>(null);
 
-  // Fetch songs with proper error handling
-  const fetchSongs = useCallback(async (bypassCache = false) => {
+  // Fetch requests with proper error handling
+  const fetchRequests = useCallback(async (bypassCache = false) => {
     if (!mountedRef.current) return;
     
     try {
       setIsLoading(true);
 
       if (!bypassCache) {
-        const cachedSongs = cacheService.get<Song[]>(SONGS_CACHE_KEY);
-        if (cachedSongs?.length > 0) {
-          console.log('Using cached songs');
-          onUpdate(cachedSongs);
+        const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
+        if (cachedRequests?.length > 0) {
+          console.log('Using cached requests');
+          onUpdate(cachedRequests);
           setIsLoading(false);
           return;
         }
       }
 
-      const { data: songsData, error } = await supabase
-        .from('songs')
-        .select('*')
-        .order('title');
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('requests')
+        .select(`
+          *,
+          requesters (
+            id,
+            name,
+            photo,
+            message,
+            created_at
+          )
+        `)
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (requestsError) throw requestsError;
 
-      if (songsData && mountedRef.current) {
-        cacheService.setSongs(SONGS_CACHE_KEY, songsData);
-        onUpdate(songsData);
+      if (!requestsData) {
+        console.log('No requests found');
+        if (mountedRef.current) {
+          onUpdate([]);
+        }
+        return;
+      }
+
+      if (mountedRef.current) {
+        const formattedRequests = requestsData.map(request => ({
+          id: request.id,
+          title: request.title,
+          artist: request.artist || '',
+          votes: request.votes || 0,
+          status: request.status || 'pending',
+          isLocked: request.is_locked || false,
+          isPlayed: request.is_played || false,
+          createdAt: new Date(request.created_at).toISOString(),
+          requesters: (request.requesters || []).map(requester => ({
+            id: requester.id,
+            name: requester.name,
+            photo: requester.photo,
+            message: requester.message || '',
+            timestamp: new Date(requester.created_at).toISOString()
+          }))
+        }));
+
+        cacheService.setRequests(REQUESTS_CACHE_KEY, formattedRequests);
+        onUpdate(formattedRequests);
       }
     } catch (error) {
-      console.error('Error fetching songs:', error);
+      console.error('Error fetching requests:', error);
       
       if (mountedRef.current) {
         setError(error instanceof Error ? error : new Error(String(error)));
         
         // Fallback to cache
-        const cachedSongs = cacheService.get<Song[]>(SONGS_CACHE_KEY);
-        if (cachedSongs) {
+        const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
+        if (cachedRequests) {
           console.warn('Using stale cache due to fetch error');
-          onUpdate(cachedSongs);
+          onUpdate(cachedRequests);
         }
       }
     } finally {
@@ -64,37 +101,80 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
     }
   }, [onUpdate]);
 
+  // Handle online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('Network connection restored');
+      setIsOnline(true);
+    };
+
+    const handleOffline = () => {
+      console.log('Network connection lost');
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Setup realtime subscription or fallback polling
   useEffect(() => {
     mountedRef.current = true;
     
     const setupRealtimeOrPolling = async () => {
-      // Attempt to set up realtime subscription
+      if (!isOnline) {
+        console.log('Skipping realtime setup while offline');
+        return;
+      }
+      
+      // Clear any existing polling
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      
+      // Attempt to set up realtime subscriptions
       try {
-        const subscriptionId = await RealtimeManager.createSubscription(
-          'songs',
+        // Subscribe to request changes
+        const requestsSub = await RealtimeManager.createSubscription(
+          'requests',
           async () => {
-            console.log('Song update received via realtime');
-            await fetchSongs(true);
+            console.log('Request update received via realtime');
+            await fetchRequests(true);
           }
         );
         
-        subscriptionIdRef.current = subscriptionId;
+        // Subscribe to requester changes
+        const requestersSub = await RealtimeManager.createSubscription(
+          'requesters',
+          async () => {
+            console.log('Requester update received via realtime');
+            await fetchRequests(true);
+          }
+        );
+        
+        requestsSubscriptionRef.current = requestsSub;
+        requestersSubscriptionRef.current = requestersSub;
         setIsRealtime(true);
         
         // Initial fetch
-        fetchSongs();
+        fetchRequests();
       } catch (error) {
-        console.error('Error setting up realtime for songs:', error);
+        console.error('Error setting up realtime for requests:', error);
         setIsRealtime(false);
         
         // Fallback to polling
-        fetchSongs();
+        fetchRequests();
         
         // Setup polling interval
         pollingIntervalRef.current = window.setInterval(() => {
-          if (mountedRef.current) {
-            fetchSongs(true);
+          if (mountedRef.current && isOnline) {
+            fetchRequests(true);
           }
         }, FALLBACK_POLLING_INTERVAL);
       }
@@ -104,7 +184,7 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
     
     // Listen for connection changes
     const connectionListener = (event: string) => {
-      if (event === 'connected' && !isRealtime) {
+      if (event === 'connected' && !isRealtime && isOnline) {
         // Re-establish realtime when connection is restored
         setupRealtimeOrPolling();
       }
@@ -116,10 +196,15 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
     return () => {
       mountedRef.current = false;
       
-      // Remove realtime subscription
-      if (subscriptionIdRef.current) {
-        RealtimeManager.removeSubscription(subscriptionIdRef.current);
-        subscriptionIdRef.current = null;
+      // Remove realtime subscriptions
+      if (requestsSubscriptionRef.current) {
+        RealtimeManager.removeSubscription(requestsSubscriptionRef.current);
+        requestsSubscriptionRef.current = null;
+      }
+      
+      if (requestersSubscriptionRef.current) {
+        RealtimeManager.removeSubscription(requestersSubscriptionRef.current);
+        requestersSubscriptionRef.current = null;
       }
       
       // Clear polling interval
@@ -131,12 +216,46 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
       // Remove connection listener
       RealtimeManager.removeConnectionListener(connectionListener);
     };
-  }, [fetchSongs, isRealtime]);
+  }, [fetchRequests, isOnline, isRealtime]);
+
+  // Force reconnection
+  const reconnect = useCallback(async () => {
+    console.log('Manual reconnection requested');
+    
+    // Remove existing subscriptions
+    if (requestsSubscriptionRef.current) {
+      await RealtimeManager.removeSubscription(requestsSubscriptionRef.current);
+      requestsSubscriptionRef.current = null;
+    }
+    
+    if (requestersSubscriptionRef.current) {
+      await RealtimeManager.removeSubscription(requestersSubscriptionRef.current);
+      requestersSubscriptionRef.current = null;
+    }
+    
+    // Clear polling interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    
+    setIsRealtime(false);
+    
+    // Reconnect realtime manager
+    await RealtimeManager.reconnect();
+    
+    // Fetch latest data
+    await fetchRequests(true);
+    
+    return true;
+  }, [fetchRequests]);
 
   return {
     isLoading,
     error,
-    refetch: () => fetchSongs(true),
+    isOnline,
+    refetch: () => fetchRequests(true),
+    reconnect,
     isRealtime
   };
 }
