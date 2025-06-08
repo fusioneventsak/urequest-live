@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ThumbsUp, Lock, CheckCircle2, ChevronDown, ChevronUp, Users, UserCircle } from 'lucide-react';
+import { supabase } from '../utils/supabase';
 import { useUiSettings } from '../hooks/useUiSettings';
 import { format } from 'date-fns';
 import type { SongRequest } from '../types';
