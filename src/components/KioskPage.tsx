@@ -293,7 +293,7 @@ export function KioskPage({
         <div className="flex-1 overflow-y-auto px-6 pb-24">
           {isSubmitting && !selectedSong ? (
             <div className="flex items-center justify-center h-full">
-              <LoadingSpinner size="lg\" message=\"Processing..." />
+             <LoadingSpinner size="lg" message="Processing..." />
             </div>
           ) : activeTab === 'requests' ? (
             filteredSongs.length > 0 ? (
