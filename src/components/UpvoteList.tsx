@@ -84,14 +84,7 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
     try {
       const success = await onVote(id);
       if (success) {
-        // Add vote to database
-        const { error } = await supabase
-          .from('user_votes')
-          .insert({ request_id: id, user_id: currentUserId });
-
-        if (error) throw error;
-
-        // Update local state
+        // Update local state - the database insertion is handled by the parent's onVote handler
         setVotedRequests(prev => new Set([...prev, id]));
       }
     } catch (error) {
