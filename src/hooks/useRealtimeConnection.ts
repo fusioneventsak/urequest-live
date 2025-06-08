@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { realtimeManager } from '../utils/realtimeManager';
+import { RealtimeManager } from '../utils/realtimeManager';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export function useRealtimeConnection() {
   const [connectionStatus, setConnectionStatus] = useState<string>(
-    realtimeManager.getConnectionState()
+    RealtimeManager.getConnectionState()
   );
   const [error, setError] = useState<Error | null>(null);
   const [lastReconnectTime, setLastReconnectTime] = useState<Date | null>(null);
@@ -16,7 +16,7 @@ export function useRealtimeConnection() {
     const listenerId = `connection-listener-${uuidv4()}`;
     
     // Register listener for connection status updates
-    realtimeManager.addListener(listenerId, (status, err) => {
+    RealtimeManager.addListener(listenerId, (status, err) => {
       setConnectionStatus(status);
       
       if (err) {
@@ -32,13 +32,13 @@ export function useRealtimeConnection() {
     
     // Cleanup on unmount
     return () => {
-      realtimeManager.removeListener(listenerId);
+      RealtimeManager.removeListener(listenerId);
     };
   }, []);
   
   // Function to manually trigger reconnection
   const reconnect = () => {
-    realtimeManager.reconnect();
+    RealtimeManager.reconnect();
     setLastReconnectTime(new Date());
   };
   
