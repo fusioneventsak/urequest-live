@@ -19,6 +19,11 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
   const [scrollProgress, setScrollProgress] = useState(0);
   const [votedRequests, setVotedRequests] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Debug log when requests change
+  useEffect(() => {
+    console.log('🔄 UpvoteList requests updated:', requests.length, requests.map(r => r.id));
+  }, [requests]);
 
   // Fetch user's votes
   useEffect(() => {
@@ -97,7 +102,14 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
   // Filter out played requests and sort by votes
   const activeRequests = requests
     .filter(request => !request.isPlayed)
-    .sort((a, b) => (b.votes || 0) - (a.votes || 0));
+    .sort((a, b) => {
+      // Locked requests always go first
+      if (a.isLocked) return -1;
+      if (b.isLocked) return 1;
+      
+      // Then sort by votes
+      return (b.votes || 0) - (a.votes || 0);
+    });
 
   if (isLoading) {
     return (
