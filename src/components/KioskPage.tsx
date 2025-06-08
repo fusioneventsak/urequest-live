@@ -5,6 +5,7 @@ import { useUiSettings } from '../hooks/useUiSettings';
 import { Logo } from './shared/Logo';
 import { Ticker } from './Ticker';
 import { LoadingSpinner } from './shared/LoadingSpinner';
+import { ConnectionStatus } from './ConnectionStatus';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import { UpvoteList } from './UpvoteList';
 import QRCode from 'qrcode.react';
@@ -209,6 +210,10 @@ export function KioskPage({
           className="px-6 pt-10 pb-4 text-center relative"
           style={{ backgroundColor: headerBgColor }}
         >
+          <div className="absolute left-4 top-4">
+            <ConnectionStatus />
+          </div>
+          
           {settings?.show_qr_code && (
             <div className="absolute right-4 top-4 p-2 bg-white rounded-lg shadow-md">
               <QRCode 

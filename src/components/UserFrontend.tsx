@@ -6,6 +6,7 @@ import { UpvoteList } from './UpvoteList';
 import { RequestModal } from './RequestModal';
 import { LandingPage } from './LandingPage';
 import { Ticker } from './Ticker';
+import { ConnectionStatus } from './ConnectionStatus';
 import { useUiSettings } from '../hooks/useUiSettings';
 import type { Song, SongRequest, User } from '../types';
 
@@ -144,6 +145,8 @@ export function UserFrontend({
                 {currentUser.name}
               </span>
             </button>
+
+            <ConnectionStatus className="mx-2" />
 
             {isAdmin && (
               <button 

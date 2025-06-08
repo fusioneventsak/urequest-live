@@ -433,60 +433,25 @@ function App() {
         throw new Error('You must be logged in to vote');
       }
 
-      // Check if user already voted
-      const { data: existingVote, error: checkError } = await supabase
-        .from('user_votes')
-        .select('id')
-        .eq('request_id', id)
-        .eq('user_id', currentUser.id || currentUser.name)
-        .maybeSingle();
+      // Single atomic database call instead of multiple operations
+      const { data, error } = await supabase.rpc('add_vote', {
+        p_request_id: id,
+        p_user_id: currentUser.id || currentUser.name
+      });
 
-      if (checkError && checkError.code !== 'PGRST116') { // Not found is ok
-        throw checkError;
-      }
+      if (error) throw error;
 
-      if (existingVote) {
+      if (data === false) {
         toast.error('You have already voted for this request');
         return false;
       }
-
-      // Get current votes
-      const { data, error: getError } = await supabase
-        .from('requests')
-        .select('votes')
-        .eq('id', id)
-        .single();
-        
-      if (getError) throw getError;
-      
-      // Update votes count
-      const currentVotes = data?.votes || 0;
-      const { error: updateError } = await supabase
-        .from('requests')
-        .update({ votes: currentVotes + 1 })
-        .eq('id', id);
-        
-      if (updateError) throw updateError;
-      
-      // Record vote to prevent duplicates
-      const { error: voteError } = await supabase
-        .from('user_votes')
-        .insert({
-          request_id: id,
-          user_id: currentUser.id || currentUser.name,
-          created_at: new Date().toISOString()
-        });
-        
-      if (voteError) throw voteError;
         
       toast.success('Vote added!');
       return true;
     } catch (error) {
       console.error('Error voting for request:', error);
       
-      if (error instanceof Error && error.message.includes('already voted')) {
-        toast.error(error.message);
-      } else if (error instanceof Error && (
+      if (error instanceof Error && (
         error.message.includes('Failed to fetch') || 
         error.message.includes('NetworkError') ||
         error.message.includes('network'))
@@ -912,179 +877,3 @@ function App() {
           activeSetList={activeSetList}
           logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
           onSubmitRequest={handleSubmitRequest}
-        />
-      </ErrorBoundary>
-    );
-  }
-
-  // Show backend if accessing /backend and authenticated
-  if (isBackend && isAdmin) {
-    // Define lockedRequest variable before using it
-    const lockedRequest = requests.find(r => r.isLocked && !r.isPlayed);
-    
-    return (
-      <ErrorBoundary>
-        <div className="min-h-screen bg-darker-purple">
-          <div className="max-w-7xl mx-auto p-4 sm:p-6">
-            <header className="mb-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between">
-                <div className="flex items-center mb-4 md:mb-0">
-                  <Logo 
-                    url={settings?.band_logo_url || DEFAULT_BAND_LOGO}
-                    className="h-12 mr-4"
-                  />
-                  <h1 className="text-3xl font-bold neon-text mb-2">
-                    Band Request Hub
-                  </h1>
-                </div>
-                
-                <div className="flex items-center space-x-4">
-                  {!isOnline && (
-                    <div className="px-3 py-1 bg-red-500/20 text-red-400 rounded-md text-sm flex items-center">
-                      <span className="mr-1">●</span>
-                      Offline Mode
-                    </div>
-                  )}
-                  <button 
-                    onClick={navigateToFrontend}
-                    className="neon-button"
-                  >
-                    Exit to Public View
-                  </button>
-                  <button 
-                    onClick={navigateToKiosk}
-                    className="neon-button"
-                  >
-                    Kiosk View
-                  </button>
-                  <button 
-                    onClick={handleAdminLogout}
-                    className="px-4 py-2 text-red-400 hover:bg-red-400/20 rounded-md flex items-center"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Logout
-                  </button>
-                </div>
-              </div>
-              
-              <p className="text-gray-300 max-w-2xl mt-2 mb-4">
-                Manage your set lists, song library, and customize the request system all in one place.
-              </p>
-            </header>
-
-            <BackendTabs 
-              activeTab={activeBackendTab}
-              onTabChange={setActiveBackendTab}
-            />
-
-            <div className="space-y-8">
-              {activeBackendTab === 'requests' && (
-                <ErrorBoundary>
-                  <div className="glass-effect rounded-lg p-6">
-                    <h2 className="text-xl font-semibold neon-text mb-4">Current Request Queue</h2>
-                    <QueueView 
-                      requests={requests}
-                      onLockRequest={handleLockRequest}
-                      onMarkPlayed={handleMarkPlayed}
-                      onResetQueue={handleResetQueue}
-                    />
-                  </div>
-
-                  <ErrorBoundary>
-                    <TickerManager 
-                      nextSong={lockedRequest
-                        ? {
-                            title: lockedRequest.title,
-                            artist: lockedRequest.artist
-                          }
-                        : undefined
-                      }
-                      isActive={isTickerActive}
-                      customMessage={tickerMessage}
-                      onUpdateMessage={setTickerMessage}
-                      onToggleActive={() => setIsTickerActive(!isTickerActive)}
-                    />
-                  </ErrorBoundary>
-                </ErrorBoundary>
-              )}
-
-              {activeBackendTab === 'setlists' && (
-                <ErrorBoundary>
-                  <SetListManager 
-                    songs={songs}
-                    setLists={setLists}
-                    onCreateSetList={handleCreateSetList}
-                    onUpdateSetList={handleUpdateSetList}
-                    onDeleteSetList={handleDeleteSetList}
-                    onSetActive={handleSetActive}
-                  />
-                </ErrorBoundary>
-              )}
-
-              {activeBackendTab === 'songs' && (
-                <ErrorBoundary>
-                  <SongLibrary 
-                    songs={songs}
-                    onAddSong={handleAddSong}
-                    onUpdateSong={handleUpdateSong}
-                    onDeleteSong={handleDeleteSong}
-                  />
-                </ErrorBoundary>
-              )}
-
-              {activeBackendTab === 'settings' && (
-                <>
-                  <ErrorBoundary>
-                    <LogoManager 
-                      isAdmin={isAdmin}
-                      currentLogoUrl={settings?.band_logo_url || null}
-                      onLogoUpdate={handleLogoUpdate}
-                    />
-                  </ErrorBoundary>
-
-                  <ErrorBoundary>
-                    <ColorCustomizer isAdmin={isAdmin} />
-                  </ErrorBoundary>
-
-                  <ErrorBoundary>
-                    <SettingsManager />
-                  </ErrorBoundary>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </ErrorBoundary>
-    );
-  }
-
-  // Show landing page if no user is set up
-  if (!currentUser) {
-    return (
-      <ErrorBoundary>
-        <LandingPage onComplete={handleUserUpdate} />
-      </ErrorBoundary>
-    );
-  }
-
-  // Show main frontend
-  return (
-    <ErrorBoundary>
-      <UserFrontend 
-        songs={songs}
-        requests={requests}
-        activeSetList={activeSetList}
-        currentUser={currentUser}
-        onSubmitRequest={handleSubmitRequest}
-        onVoteRequest={handleVoteRequest}
-        onUpdateUser={handleUserUpdate}
-        logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
-        isAdmin={isAdmin}
-        onLogoClick={onLogoClick}
-        onBackendAccess={navigateToBackend}
-      />
-    </ErrorBoundary>
-  );
-}
-
-export default App;
