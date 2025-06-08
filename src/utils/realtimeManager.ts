@@ -15,6 +15,9 @@ const globalListeners: Set<Function> = new Set();
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 let heartbeatTimer: NodeJS.Timeout | null = null;
 
+// Client identifier
+const CLIENT_ID = nanoid(12);
+
 // Connection management
 export const RealtimeManager = {
   /**
@@ -51,8 +54,35 @@ export const RealtimeManager = {
           
           // Start heartbeat
           startHeartbeat();
+          
+          // Log successful connection
+          try {
+            await supabase
+              .from('realtime_connection_logs')
+              .insert({
+                status: 'connected',
+                client_id: CLIENT_ID,
+                created_at: new Date().toISOString()
+              });
+          } catch (logError) {
+            console.warn('Failed to log connection:', logError);
+          }
         } else {
           console.warn(`Failed to establish realtime connection (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`);
+          
+          // Log connection failure
+          try {
+            await supabase
+              .from('realtime_connection_logs')
+              .insert({
+                status: 'error',
+                client_id: CLIENT_ID,
+                error_message: 'Connection timeout',
+                created_at: new Date().toISOString()
+              });
+          } catch (logError) {
+            console.warn('Failed to log connection error:', logError);
+          }
           
           // Schedule reconnection
           setTimeout(() => {
@@ -63,10 +93,38 @@ export const RealtimeManager = {
       } else {
         console.error('Maximum realtime connection attempts reached');
         notifyListeners('max_attempts_reached');
+        
+        // Log max attempts reached
+        try {
+          await supabase
+            .from('realtime_connection_logs')
+            .insert({
+              status: 'error',
+              client_id: CLIENT_ID,
+              error_message: 'Maximum connection attempts reached',
+              created_at: new Date().toISOString()
+            });
+        } catch (logError) {
+          console.warn('Failed to log connection error:', logError);
+        }
       }
     } catch (error) {
       console.error('Error establishing realtime connection:', error);
       isConnected = false;
+      
+      // Log connection error
+      try {
+        await supabase
+          .from('realtime_connection_logs')
+          .insert({
+            status: 'error',
+            client_id: CLIENT_ID,
+            error_message: error instanceof Error ? error.message : String(error),
+            created_at: new Date().toISOString()
+          });
+      } catch (logError) {
+        console.warn('Failed to log connection error:', logError);
+      }
       
       // Schedule reconnection
       setTimeout(() => {
@@ -114,6 +172,8 @@ export const RealtimeManager = {
         config: {
           broadcast: { self: true },
           presence: { key: subscriptionId },
+          retryAfter: 2000,
+          timeout: 30000 // 30 seconds
         },
       });
       
@@ -130,15 +190,72 @@ export const RealtimeManager = {
             console.error(`Error in subscription callback (${subscriptionId}):`, error);
           }
         }
-      );
+      )
+      .on('error', (err) => {
+        console.error(`Channel error (${subscriptionId}):`, err);
+        
+        // Log channel error
+        try {
+          supabase
+            .from('realtime_connection_logs')
+            .insert({
+              status: 'error',
+              client_id: CLIENT_ID,
+              error_message: `Channel error (${subscriptionId}): ${err.message || JSON.stringify(err)}`,
+              created_at: new Date().toISOString()
+            })
+            .then(() => {})
+            .catch(logError => {
+              console.warn('Failed to log channel error:', logError);
+            });
+        } catch (logError) {
+          console.warn('Failed to log channel error:', logError);
+        }
+      })
+      .on('system', (event) => {
+        console.log(`Channel system event (${subscriptionId}):`, event);
+      })
+      .on('disconnect', (event) => {
+        console.log(`Channel disconnected (${subscriptionId}):`, event);
+        
+        // Attempt to reconnect after a delay
+        setTimeout(() => {
+          if (activeChannels.has(subscriptionId)) {
+            console.log(`Attempting to reconnect channel (${subscriptionId})...`);
+            RealtimeManager.removeSubscription(subscriptionId)
+              .then(() => RealtimeManager.createSubscription(table, callback, filter))
+              .catch(console.error);
+          }
+        }, 5000);
+      });
       
       // Subscribe with improved error handling
       channel.subscribe((status, err) => {
+        console.log(`Subscription status (${subscriptionId}):`, status);
+        
         if (status === 'SUBSCRIBED') {
           console.log(`Subscription active: ${subscriptionId}`);
           activeChannels.set(subscriptionId, channel);
         } else if (status === 'CHANNEL_ERROR') {
           console.error(`Channel error for ${subscriptionId}:`, err);
+          
+          // Log channel error
+          try {
+            supabase
+              .from('realtime_connection_logs')
+              .insert({
+                status: 'error',
+                client_id: CLIENT_ID,
+                error_message: `Channel error (${subscriptionId}): ${err?.message || JSON.stringify(err)}`,
+                created_at: new Date().toISOString()
+              })
+              .then(() => {})
+              .catch(logError => {
+                console.warn('Failed to log channel error:', logError);
+              });
+          } catch (logError) {
+            console.warn('Failed to log channel error:', logError);
+          }
           
           // Attempt to recreate subscription after delay
           setTimeout(() => {
@@ -156,6 +273,21 @@ export const RealtimeManager = {
       return subscriptionId;
     } catch (error) {
       console.error(`Error creating subscription (${subscriptionId}):`, error);
+      
+      // Log subscription error
+      try {
+        await supabase
+          .from('realtime_connection_logs')
+          .insert({
+            status: 'error',
+            client_id: CLIENT_ID,
+            error_message: `Error creating subscription (${subscriptionId}): ${error instanceof Error ? error.message : String(error)}`,
+            created_at: new Date().toISOString()
+          });
+      } catch (logError) {
+        console.warn('Failed to log subscription error:', logError);
+      }
+      
       throw error;
     }
   },
@@ -205,6 +337,20 @@ export const RealtimeManager = {
   reconnect: async (): Promise<boolean> => {
     if (isConnecting) return false;
     
+    // Log reconnection attempt
+    try {
+      await supabase
+        .from('realtime_connection_logs')
+        .insert({
+          status: 'disconnected',
+          client_id: CLIENT_ID,
+          error_message: 'Manual reconnection requested',
+          created_at: new Date().toISOString()
+        });
+    } catch (logError) {
+      console.warn('Failed to log reconnection attempt:', logError);
+    }
+    
     // Close all existing channels
     for (const [id, channel] of activeChannels.entries()) {
       try {
@@ -238,7 +384,8 @@ export const RealtimeManager = {
       
       if (heartbeatChannel && typeof heartbeatChannel.track === 'function') {
         await heartbeatChannel.track({
-          heartbeat: Date.now()
+          heartbeat: Date.now(),
+          client_id: CLIENT_ID
         });
         console.log('Heartbeat sent successfully');
         return true;
@@ -252,7 +399,8 @@ export const RealtimeManager = {
         // Send heartbeat
         if (typeof tempChannel.track === 'function') {
           await tempChannel.track({
-            heartbeat: Date.now()
+            heartbeat: Date.now(),
+            client_id: CLIENT_ID
           });
         }
         
@@ -278,6 +426,20 @@ export const RealtimeManager = {
   cleanup: async (): Promise<void> => {
     // Stop heartbeat
     stopHeartbeat();
+    
+    // Log disconnection
+    try {
+      await supabase
+        .from('realtime_connection_logs')
+        .insert({
+          status: 'disconnected',
+          client_id: CLIENT_ID,
+          error_message: 'Client disconnected',
+          created_at: new Date().toISOString()
+        });
+    } catch (logError) {
+      console.warn('Failed to log disconnection:', logError);
+    }
     
     // Unsubscribe all channels
     for (const [id, channel] of activeChannels.entries()) {
