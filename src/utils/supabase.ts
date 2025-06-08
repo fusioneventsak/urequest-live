@@ -12,6 +12,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: false // Prevent auto-detection of auth params in URL
   },
   global: {
     headers: {
@@ -22,6 +23,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 10, // Increased from 5 to improve realtime responsiveness
     },
+    reconnect: {
+      maxRetries: 10,
+      delay: 1000
+    }
   },
 });
 
