@@ -1,7 +1,9 @@
-import { useEffect, useCallback, useState } from 'react';
+// src/hooks/useSongSync.ts
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase, executeDbOperation } from '../utils/supabase';
 import { cacheService } from '../utils/cache';
 import { executeWithCircuitBreaker } from '../utils/circuitBreaker';
+import { nanoid } from 'nanoid';
 import type { Song } from '../types';
 
 const SONGS_CACHE_KEY = 'songs:all';
@@ -16,9 +18,26 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
   const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const mountedRef = useRef(true);
+  const channelRef = useRef<any>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchSongs = useCallback(async (bypassCache = false) => {
+    // Create a new abort controller for this fetch
+    if (abortControllerRef.current) {
+      try {
+        abortControllerRef.current.abort();
+      } catch (err) {
+        console.warn('Error aborting previous request:', err);
+      }
+    }
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+    
     try {
+      if (!mountedRef.current) return;
+      
       setIsLoading(true);
       setError(null);
 
@@ -26,29 +45,42 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
         const cachedSongs = cacheService.get<Song[]>(SONGS_CACHE_KEY);
         if (cachedSongs?.length > 0) {
           console.log('Using cached songs');
-          onUpdate(cachedSongs);
-          setIsLoading(false);
+          if (mountedRef.current) {
+            onUpdate(cachedSongs);
+            setIsLoading(false);
+          }
           return;
         }
       }
 
       await executeWithCircuitBreaker(SONGS_SERVICE_KEY, async () => {
         await executeDbOperation('songs:list', async () => {
+          if (!mountedRef.current) return;
+          
           const { data: songsData, error } = await supabase
             .from('songs')
             .select('*')
-            .order('title');
+            .order('title')
+            .abortSignal(signal);
 
           if (error) throw error;
 
-          if (songsData) {
+          if (songsData && mountedRef.current) {
             cacheService.setSongs(SONGS_CACHE_KEY, songsData);
             onUpdate(songsData);
           }
-        });
-      });
+        }, signal);
+      }, signal);
 
     } catch (error) {
+      if (!mountedRef.current) return;
+      
+      if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted') || error.message.includes('Component unmounted'))) {
+        // Silently handle abortion
+        console.log('Songs fetch aborted');
+        return;
+      }
+      
       console.error('Error fetching songs:', error);
       setError(error instanceof Error ? error : new Error(String(error)));
       
@@ -58,30 +90,34 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
         onUpdate(cachedSongs);
       }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [onUpdate]);
 
   useEffect(() => {
-    let mounted = true;
-    let channel: ReturnType<typeof supabase.channel>;
-    let retryTimeout: NodeJS.Timeout;
-    let initTimeout: NodeJS.Timeout;
-    let connectionCheckInterval: NodeJS.Timeout;
-
-    const calculateRetryDelay = (attempt: number) => {
-      // Exponential backoff with jitter
-      const baseDelay = INITIAL_RETRY_DELAY * Math.pow(1.5, attempt);
-      const jitter = Math.random() * 2000; // Add up to 2 seconds of jitter
-      return Math.min(baseDelay + jitter, 60000); // Cap at 60 seconds
-    };
+    mountedRef.current = true;
+    let channelId = `songs_changes_${Date.now()}_${nanoid()}`;
 
     const cleanupChannel = async () => {
-      if (channel) {
+      if (channelRef.current) {
         try {
           console.log('Cleaning up song sync channel...');
-          await channel.unsubscribe();
-          await supabase.removeChannel(channel);
+          
+          try {
+            await channelRef.current.unsubscribe();
+          } catch (unsubError) {
+            console.warn('Error unsubscribing channel:', unsubError);
+          }
+          
+          try {
+            await supabase.removeChannel(channelRef.current);
+          } catch (removeError) {
+            console.warn('Error removing channel:', removeError);
+          }
+          
+          channelRef.current = null;
           setIsSubscribed(false);
         } catch (err) {
           console.warn('Error cleaning up channel:', err);
@@ -119,7 +155,7 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
     };
 
     const setupRealtimeSubscription = async () => {
-      if (!mounted) return;
+      if (!mountedRef.current) return;
 
       try {
         if (retryCount >= MAX_RETRY_ATTEMPTS) {
@@ -143,11 +179,16 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
           await fetchSongs(true);
           
           // Schedule retry
-          if (mounted && retryCount < MAX_RETRY_ATTEMPTS) {
-            const delay = calculateRetryDelay(retryCount);
+          if (mountedRef.current && retryCount < MAX_RETRY_ATTEMPTS) {
+            const delay = INITIAL_RETRY_DELAY * Math.pow(1.5, retryCount) + (Math.random() * 2000);
             console.log(`Retrying realtime connection in ${Math.round(delay/1000)}s (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
-            retryTimeout = setTimeout(() => {
-              if (mounted) {
+            
+            if (retryTimeoutRef.current) {
+              clearTimeout(retryTimeoutRef.current);
+            }
+            
+            retryTimeoutRef.current = setTimeout(() => {
+              if (mountedRef.current) {
                 setRetryCount(prev => prev + 1);
                 setupRealtimeSubscription();
               }
@@ -156,79 +197,84 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
           return;
         }
 
-        const channelId = `songs_changes_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        
         try {
-          channel = supabase
+          channelRef.current = supabase
             .channel(channelId)
             .on(
               'postgres_changes',
               { event: '*', schema: 'public', table: 'songs' },
               async (payload) => {
-                if (!mounted || !isSubscribed) return;
+                if (!mountedRef.current || !isSubscribed) return;
                 
                 try {
                   console.log('Songs changed:', payload.eventType);
                   await fetchSongs(true);
                 } catch (err) {
                   console.error('Error handling song change:', err);
-                  // Don't throw here - we want to keep the subscription alive
                 }
               }
-            )
-            .subscribe(async (status, err) => {
-              if (!mounted) return;
+            );
+            
+          // Better error handling for subscribe
+          channelRef.current.subscribe((status: string, err: any) => {
+            if (!mountedRef.current) return;
 
-              try {
-                console.log(`Song subscription status (${channelId}):`, status, err);
+            try {
+              console.log(`Song subscription status (${channelId}):`, status, err);
 
-                if (status === 'SUBSCRIBED') {
-                  console.log(`Successfully subscribed to song changes (${channelId})`);
-                  setIsSubscribed(true);
-                  setRetryCount(0);
-                  setError(null);
-                  
-                  initTimeout = setTimeout(async () => {
-                    if (mounted) {
-                      try {
-                        await fetchSongs(true);
-                      } catch (err) {
-                        console.error('Error in initial fetch after subscription:', err);
-                      }
+              if (status === 'SUBSCRIBED') {
+                console.log(`Successfully subscribed to song changes (${channelId})`);
+                setIsSubscribed(true);
+                setRetryCount(0);
+                setError(null);
+                
+                setTimeout(async () => {
+                  if (mountedRef.current) {
+                    try {
+                      await fetchSongs(true);
+                    } catch (err) {
+                      console.error('Error in initial fetch after subscription:', err);
                     }
-                  }, SUBSCRIPTION_INIT_DELAY);
-                } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-                  console.error(`Channel ${status.toLowerCase()} (${channelId}):`, err);
-                  setIsSubscribed(false);
-                  
-                  if (err) {
-                    setError(err instanceof Error ? err : new Error(String(err)));
                   }
-                  
-                  if (mounted && retryCount < MAX_RETRY_ATTEMPTS) {
-                    const delay = calculateRetryDelay(retryCount);
-                    console.log(`Retrying in ${Math.round(delay/1000)}s (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
-                    retryTimeout = setTimeout(() => {
-                      if (mounted) {
-                        setRetryCount(prev => prev + 1);
-                        setupRealtimeSubscription();
-                      }
-                    }, delay);
-                  }
-                }
-              } catch (error) {
-                console.error(`Error handling subscription status (${channelId}):`, error);
-                setError(error instanceof Error ? error : new Error(String(error)));
+                }, SUBSCRIPTION_INIT_DELAY);
+              } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+                console.error(`Channel ${status.toLowerCase()} (${channelId}):`, err);
                 setIsSubscribed(false);
+                
+                if (err) {
+                  setError(err instanceof Error ? err : new Error(String(err)));
+                }
+                
+                if (mountedRef.current && retryCount < MAX_RETRY_ATTEMPTS) {
+                  const delay = INITIAL_RETRY_DELAY * Math.pow(1.5, retryCount) + (Math.random() * 2000);
+                  console.log(`Retrying in ${Math.round(delay/1000)}s (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+                  
+                  if (retryTimeoutRef.current) {
+                    clearTimeout(retryTimeoutRef.current);
+                  }
+                  
+                  retryTimeoutRef.current = setTimeout(() => {
+                    if (mountedRef.current) {
+                      setRetryCount(prev => prev + 1);
+                      channelId = `songs_changes_${Date.now()}_${nanoid()}`;
+                      setupRealtimeSubscription();
+                    }
+                  }, delay);
+                }
               }
-            });
+            } catch (error) {
+              console.error(`Error handling subscription status (${channelId}):`, error);
+              setError(error instanceof Error ? error : new Error(String(error)));
+              setIsSubscribed(false);
+            }
+          });
         } catch (error) {
           console.error(`Error creating channel (${channelId}):`, error);
           throw error;
         }
       } catch (error) {
         console.error('Error in setupRealtimeSubscription:', error);
-        if (mounted) {
+        if (mountedRef.current) {
           setError(error instanceof Error ? error : new Error(String(error)));
           setIsSubscribed(false);
           
@@ -240,9 +286,14 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
           }
           
           if (retryCount < MAX_RETRY_ATTEMPTS) {
-            const delay = calculateRetryDelay(retryCount);
-            retryTimeout = setTimeout(() => {
-              if (mounted) {
+            const delay = INITIAL_RETRY_DELAY * Math.pow(1.5, retryCount) + (Math.random() * 2000);
+            
+            if (retryTimeoutRef.current) {
+              clearTimeout(retryTimeoutRef.current);
+            }
+            
+            retryTimeoutRef.current = setTimeout(() => {
+              if (mountedRef.current) {
                 setRetryCount(prev => prev + 1);
                 setupRealtimeSubscription();
               }
@@ -257,8 +308,8 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
     setupRealtimeSubscription();
 
     // Monitor connection state
-    connectionCheckInterval = setInterval(() => {
-      if (mounted && !supabase.realtime.isConnected() && isSubscribed) {
+    const connectionCheckInterval = setInterval(() => {
+      if (mountedRef.current && !supabase.realtime.isConnected() && isSubscribed) {
         console.log('Realtime connection lost, attempting to reconnect...');
         setupRealtimeSubscription();
       }
@@ -266,18 +317,34 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
 
     // Refresh data periodically when subscribed
     const refreshInterval = setInterval(() => {
-      if (mounted) {
+      if (mountedRef.current) {
         // Always fetch data periodically, regardless of subscription status
         fetchSongs(true).catch(console.error);
       }
     }, 5 * 60 * 1000); // Every 5 minutes
 
     return () => {
-      mounted = false;
-      clearTimeout(retryTimeout);
-      clearTimeout(initTimeout);
-      clearInterval(refreshInterval);
+      mountedRef.current = false;
+      
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      
       clearInterval(connectionCheckInterval);
+      clearInterval(refreshInterval);
+      
+      // Abort any in-flight requests
+      if (abortControllerRef.current) {
+        try {
+          if (!abortControllerRef.current.signal.aborted) {
+            abortControllerRef.current.abort('Component unmounted');
+          }
+        } catch (err) {
+          console.warn('Error aborting fetch on unmount:', err);
+        }
+      }
+      
       cleanupChannel().catch(console.error);
     };
   }, [fetchSongs, retryCount]);
