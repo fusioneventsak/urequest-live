@@ -204,23 +204,23 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
     
     setLockingStates(prev => new Set([...prev, id]));
     
+    // Get the current request
+    const request = requests.find(r => r.id === id);
+    if (!request) return;
+    
+    // Toggle the locked status
+    const newLockedState = !request.isLocked;
+    
+    // INSTANT OPTIMISTIC UPDATE - update UI immediately
+    setOptimisticLocks(prev => {
+      const newSet = new Set();
+      if (newLockedState) {
+        newSet.add(id); // Only this request is locked
+      }
+      return newSet;
+    });
+    
     try {
-      // Get the current request
-      const request = requests.find(r => r.id === id);
-      if (!request) return;
-      
-      // Toggle the locked status
-      const newLockedState = !request.isLocked;
-      
-      // INSTANT OPTIMISTIC UPDATE - update UI immediately
-      setOptimisticLocks(prev => {
-        const newSet = new Set();
-        if (newLockedState) {
-          newSet.add(id); // Only this request is locked
-        }
-        return newSet;
-      });
-      
       // Use the atomic database function for better performance
       if (newLockedState) {
         // Lock this request (and unlock all others)
