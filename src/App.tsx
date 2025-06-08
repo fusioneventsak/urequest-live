@@ -893,7 +893,7 @@ function App() {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-darker-purple flex items-center justify-center">
-        <LoadingSpinner size="lg\" message=\"Loading application..." />
+        <LoadingSpinner size="lg" message="Loading application..." />
       </div>
     );
   }
