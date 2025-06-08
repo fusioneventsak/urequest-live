@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ThumbsUp, Lock, CheckCircle2, ChevronDown, ChevronUp, Users, UserCircle } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { useUiSettings } from '../hooks/useUiSettings';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import type { SongRequest } from '../types';
 
@@ -24,11 +25,28 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
   const [lockingStates, setLockingStates] = useState<Set<string>>(new Set());
   const [expandedRequests, setExpandedRequests] = useState<Set<string>>(new Set());
   const [isResetting, setIsResetting] = useState(false);
+  const [optimisticLocks, setOptimisticLocks] = useState<Set<string>>(new Set());
   
   // Debug log when requests change
   useEffect(() => {
     console.log('🔄 QueueView requests updated:', requests.length, requests.map(r => r.id));
   }, [requests]);
+  
+  // Clear optimistic locks when real data arrives
+  useEffect(() => {
+    // Get the current locked request from the server data
+    const serverLockedIds = new Set(requests.filter(r => r.isLocked).map(r => r.id));
+    const optimisticLockedIds = new Set(optimisticLocks);
+    
+    // If server state matches optimistic state, clear optimistic state
+    const needsClear = Array.from(optimisticLockedIds).every(id => serverLockedIds.has(id)) &&
+                      serverLockedIds.size <= 1; // Should only have 0 or 1 locked request
+    
+    if (needsClear && optimisticLocks.size > 0) {
+      console.log('✅ Clearing optimistic locks - server state matches');
+      setOptimisticLocks(new Set());
+    }
+  }, [requests, optimisticLocks]);
   
   const { settings } = useUiSettings();
   const accentColor = settings?.frontend_accent_color || '#ff00ff';
@@ -132,11 +150,16 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
 
   // Sort deduplicated requests
   const sortedRequests = useMemo(() => {
-    return deduplicatedRequests.sort((a, b) => {
-      // Locked requests always go first
-      if (a.isLocked) return -1;
-      if (b.isLocked) return 1;
-
+    // Apply optimistic locks to the requests
+    const requestsWithOptimisticLocks = deduplicatedRequests.map(request => ({
+      ...request,
+      // Use optimistic state if available, otherwise use database state
+      isLocked: optimisticLocks.has(request.id) ? true : 
+                optimisticLocks.size > 0 ? false : 
+                request.isLocked
+    }));
+    
+    return requestsWithOptimisticLocks.sort((a, b) => {
       // Locked requests always go first
       if (a.isLocked) return -1;
       if (b.isLocked) return 1;
@@ -163,12 +186,28 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
       const latestB = Math.max(...(b.requesters?.length ? b.requesters.map(r => new Date(r.timestamp).getTime()) : [new Date(b.createdAt).getTime()]));
       return latestB - latestA;
     });
-  }, [deduplicatedRequests]);
+  }, [deduplicatedRequests, optimisticLocks]);
 
-  const handleLockRequest = async (id: string) => {
+  const handleLockRequest = useCallback(async (id: string) => {
     setLockingStates(prev => new Set([...prev, id]));
     
     try {
+      // Get the current request
+      const request = requests.find(r => r.id === id);
+      if (!request) throw new Error('Request not found');
+      
+      // Toggle the locked status
+      const newLockedState = !request.isLocked;
+      
+      // INSTANT OPTIMISTIC UPDATE - update UI immediately
+      setOptimisticLocks(prev => {
+        const newSet = new Set();
+        if (newLockedState) {
+          newSet.add(id); // Only this request is locked
+        }
+        return newSet;
+      });
+      
       // First unlock all other requests
       const { error: unlockError } = await supabase
         .from('requests')
@@ -177,14 +216,30 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
       
       if (unlockError) throw unlockError;
       
-      // Get the current request
-      const request = requests.find(r => r.id === id);
-      if (!request) throw new Error('Request not found');
+      // Then update this request's lock status
+      const { error } = await supabase
+        .from('requests')
+        .update({ is_locked: newLockedState })
+        .eq('id', id);
+        
+      if (error) throw error;
       
-      // Then toggle this request's lock status
-      const newLockState = !request.isLocked;
+      console.log('✅ Lock status updated in database');
+    } catch (error) {
+      console.error('❌ Error updating lock status:', error);
       
-      await onLockRequest(id);
+      // REVERT optimistic update on error
+      setOptimisticLocks(new Set());
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to update request. Please try again.');
+      }
     } finally {
       setTimeout(() => {
         setLockingStates(prev => {
@@ -194,7 +249,7 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
         });
       }, 300);
     }
-  };
+  }, [requests]);
   
   // Toggle expanded/collapsed state for a request
   const toggleRequestExpanded = (id: string) => {
@@ -248,6 +303,9 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
       <div className="grid gap-1">
         {sortedRequests.map((request) => {
           const isLocking = lockingStates.has(request.id);
+          const isOptimisticallyLocked = optimisticLocks.has(request.id);
+          const isActuallyLocked = request.isLocked && !optimisticLocks.size;
+          const displayLocked = isOptimisticallyLocked || isActuallyLocked;
           
           // Check if requesters is a valid, populated array
           const hasRequesters = Array.isArray(request.requesters) && request.requesters.length > 0;
@@ -262,10 +320,10 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
             <div
               key={request.id}
               className={`glass-effect rounded-lg p-4 transition-all duration-300 ${
-                request.isLocked ? 'request-locked' : ''
+                displayLocked ? 'request-locked' : ''
               }`}
               style={{
-                ...(request.isLocked && {
+                ...(displayLocked && {
                   borderColor: accentColor,
                   borderWidth: '2px',
                   animation: 'glow 2s ease-in-out infinite',
@@ -300,17 +358,20 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
                     <button
                       onClick={() => handleLockRequest(request.id)}
                       disabled={isLocking}
-                      className={`p-1 rounded-full transition-all duration-300 ${
-                        request.isLocked
+                      className={`p-1 rounded-full transition-all duration-200 ${
+                        displayLocked
                           ? 'text-neon-pink bg-neon-pink/20'
                           : 'text-gray-400 hover:text-neon-pink hover:bg-neon-pink/20'
                       } ${isLocking ? 'animate-pulse' : ''}`}
-                      title={request.isLocked ? 'Unlock' : 'Lock as Next Song'}
-                      style={request.isLocked ? {
+                      title={displayLocked ? 'Unlock' : 'Lock as Next Song'}
+                      style={displayLocked ? {
                         animation: 'pulse 2s ease-in-out infinite',
                       } : undefined}
                     >
                       <Lock className={`w-6 h-6 ${isLocking ? 'animate-spin' : ''}`} />
+                      {isOptimisticallyLocked && !isActuallyLocked && (
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-pulse" />
+                      )}
                     </button>
                     <button
                       onClick={() => onMarkPlayed(request.id)}
