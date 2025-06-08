@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// src/App.tsx
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from './utils/supabase';
 import { UserFrontend } from './components/UserFrontend';
 import { BackendLogin } from './components/BackendLogin';
@@ -31,6 +32,7 @@ const DEFAULT_BAND_LOGO = "https://www.fusion-events.ca/wp-content/uploads/2025/
 const BACKEND_PATH = "backend";
 const KIOSK_PATH = "kiosk";
 const MAX_PHOTO_SIZE = 300 * 1024; // 300KB limit for photos
+const MAX_REQUEST_RETRIES = 3;
 
 function App() {
   // Authentication state
@@ -51,6 +53,15 @@ function App() {
   const [tickerMessage, setTickerMessage] = useState<string>('');
   const [isTickerActive, setIsTickerActive] = useState(false);
   
+  // Track network state
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isAppActive, setIsAppActive] = useState(true);
+  
+  // Ref to track if component is mounted
+  const mountedRef = useRef(true);
+  const requestInProgressRef = useRef(false);
+  const requestRetriesRef = useRef(0);
+  
   // UI Settings
   const { settings, updateSettings } = useUiSettings();
   
@@ -58,6 +69,97 @@ function App() {
   const { isLoading: isFetchingSongs } = useSongSync(setSongs);
   const { isLoading: isFetchingRequests, reconnect: reconnectRequests } = useRequestSync(setRequests);
   const { isLoading: isFetchingSetLists, refetch: refreshSetLists } = useSetListSync(setSetLists);
+
+  // Global error handler for unhandled promise rejections
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled Promise Rejection:', event.reason);
+      
+      // Don't show errors for aborted requests or unmounted components
+      const errorMessage = event.reason?.message || String(event.reason);
+      if (errorMessage.includes('aborted') || 
+          errorMessage.includes('Component unmounted') ||
+          errorMessage.includes('channel closed')) {
+        // Silently handle these errors
+        event.preventDefault();
+        return;
+      }
+      
+      // Show toast for network errors
+      if (errorMessage.includes('Failed to fetch') || 
+          errorMessage.includes('NetworkError') || 
+          errorMessage.includes('network')) {
+        toast.error('Network connection issue. Please check your internet connection.');
+        event.preventDefault();
+        return;
+      }
+      
+      // Show generic error for other unhandled errors
+      toast.error('An error occurred. Please try again later.');
+      event.preventDefault();
+    };
+
+    // Listen for unhandled promise rejections
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  // Handle online/offline status
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('🌐 Network connection restored');
+      setIsOnline(true);
+      
+      // Attempt to reconnect and refresh data
+      reconnectRequests();
+      refreshSetLists();
+      
+      toast.success('Network connection restored');
+    };
+
+    const handleOffline = () => {
+      console.log('🌐 Network connection lost');
+      setIsOnline(false);
+      toast.error('Network connection lost. You can still view cached content.');
+    };
+
+    // Handle page visibility changes
+    const handleVisibilityChange = () => {
+      const isVisible = document.visibilityState === 'visible';
+      setIsAppActive(isVisible);
+      
+      if (isVisible) {
+        console.log('📱 App is now active. Refreshing data...');
+        // Refresh data when app becomes visible again
+        reconnectRequests();
+        refreshSetLists();
+      } else {
+        console.log('📱 App is now inactive');
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [reconnectRequests, refreshSetLists]);
+
+  // Track component mounted state
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Check if we should show the backend or kiosk view
   useEffect(() => {
@@ -184,11 +286,19 @@ function App() {
     return `data:image/svg+xml;base64,${btoa(svg)}`;
   };
 
-  // Handle song request submission
+  // Handle song request submission with retry logic
   const handleSubmitRequest = useCallback(async (data: RequestFormData): Promise<boolean> => {
-    console.log('Submitting request:', data);
+    if (requestInProgressRef.current) {
+      console.log('Request already in progress, please wait...');
+      toast.error('A request is already being processed. Please wait a moment and try again.');
+      return false;
+    }
+    
+    requestInProgressRef.current = true;
     
     try {
+      console.log('Submitting request:', data);
+      
       // Validate photo size if provided
       if (data.userPhoto && data.userPhoto.length > MAX_PHOTO_SIZE) {
         throw new Error('Profile photo is too large. Please use a smaller image (max 300KB).');
@@ -259,14 +369,38 @@ function App() {
         if (requesterError) throw requesterError;
       }
 
+      // Reset retry count on success
+      requestRetriesRef.current = 0;
+      
       toast.success('Your request has been added to the queue!');
       return true;
     } catch (error) {
       console.error('Error submitting request:', error);
       
       // If we get channel closed errors, attempt to reconnect
-      if (error instanceof Error && error.message.includes('channel')) {
+      if (error instanceof Error && 
+          (error.message.includes('channel') || 
+           error.message.includes('Failed to fetch') || 
+           error.message.includes('NetworkError'))) {
+        
         reconnectRequests();
+        
+        // Try to retry the request automatically
+        if (requestRetriesRef.current < MAX_REQUEST_RETRIES) {
+          requestRetriesRef.current++;
+          
+          const delay = Math.pow(2, requestRetriesRef.current) * 1000; // Exponential backoff
+          console.log(`Automatically retrying request in ${delay/1000} seconds (attempt ${requestRetriesRef.current}/${MAX_REQUEST_RETRIES})...`);
+          
+          setTimeout(() => {
+            if (mountedRef.current) {
+              requestInProgressRef.current = false;
+              handleSubmitRequest(data).catch(console.error);
+            }
+          }, delay);
+          
+          return false;
+        }
       }
       
       if (error instanceof Error) {
@@ -278,12 +412,22 @@ function App() {
         toast.error('Failed to submit request. Please try again.');
       }
       
+      // Reset retry count on giving up
+      requestRetriesRef.current = 0;
+      
       return false;
+    } finally {
+      requestInProgressRef.current = false;
     }
   }, [reconnectRequests]);
 
-  // Handle request vote
+  // Handle request vote with error handling
   const handleVoteRequest = useCallback(async (id: string): Promise<boolean> => {
+    if (!isOnline) {
+      toast.error('Cannot vote while offline. Please check your internet connection.');
+      return false;
+    }
+    
     try {
       if (!currentUser || !currentUser.id) {
         throw new Error('You must be logged in to vote');
@@ -342,16 +486,27 @@ function App() {
       
       if (error instanceof Error && error.message.includes('already voted')) {
         toast.error(error.message);
+      } else if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
       } else {
         toast.error('Failed to vote for this request. Please try again.');
       }
       
       return false;
     }
-  }, [currentUser]);
+  }, [currentUser, isOnline]);
 
   // Handle locking a request (marking it as next)
   const handleLockRequest = useCallback(async (id: string) => {
+    if (!isOnline) {
+      toast.error('Cannot update requests while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       const requestToUpdate = requests.find(r => r.id === id);
       if (!requestToUpdate) return;
@@ -380,12 +535,26 @@ function App() {
       toast.success(newLockedState ? 'Request locked as next song' : 'Request unlocked');
     } catch (error) {
       console.error('Error toggling request lock:', error);
-      toast.error('Failed to update request. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to update request. Please try again.');
+      }
     }
-  }, [requests]);
+  }, [requests, isOnline]);
 
   // Handle marking a request as played
   const handleMarkPlayed = useCallback(async (id: string) => {
+    if (!isOnline) {
+      toast.error('Cannot update requests while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       // Update the request as played
       const { error } = await supabase
@@ -401,12 +570,26 @@ function App() {
       toast.success('Request marked as played');
     } catch (error) {
       console.error('Error marking request as played:', error);
-      toast.error('Failed to update request. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to update request. Please try again.');
+      }
     }
-  }, []);
+  }, [isOnline]);
 
   // Handle resetting the request queue
   const handleResetQueue = useCallback(async () => {
+    if (!isOnline) {
+      toast.error('Cannot reset queue while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       // Count requests to be cleared
       const pendingRequests = requests.filter(r => !r.isPlayed).length;
@@ -445,9 +628,18 @@ function App() {
       toast.success('Request queue cleared and rate limits reset');
     } catch (error) {
       console.error('Error resetting queue:', error);
-      toast.error('Failed to clear queue. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to clear queue. Please try again.');
+      }
     }
-  }, [requests, activeSetList]);
+  }, [requests, activeSetList, isOnline]);
 
   // Handle adding a new song
   const handleAddSong = useCallback((song: Omit<Song, 'id'>) => {
@@ -468,6 +660,11 @@ function App() {
 
   // Handle creating a new set list
   const handleCreateSetList = useCallback(async (newSetList: Omit<SetList, 'id'>) => {
+    if (!isOnline) {
+      toast.error('Cannot create set list while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       // Extract songs from the set list to handle separately
       const { songs, ...setListData } = newSetList;
@@ -507,12 +704,26 @@ function App() {
       refreshSetLists(); // Refresh to get latest data
     } catch (error) {
       console.error('Error creating set list:', error);
-      toast.error('Failed to create set list. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to create set list. Please try again.');
+      }
     }
-  }, [refreshSetLists]);
+  }, [refreshSetLists, isOnline]);
 
   // Handle updating a set list
   const handleUpdateSetList = useCallback(async (updatedSetList: SetList) => {
+    if (!isOnline) {
+      toast.error('Cannot update set list while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       const { id, songs, ...setListData } = updatedSetList;
       
@@ -559,12 +770,26 @@ function App() {
       refreshSetLists(); // Refresh to get latest data
     } catch (error) {
       console.error('Error updating set list:', error);
-      toast.error('Failed to update set list. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to update set list. Please try again.');
+      }
     }
-  }, [refreshSetLists]);
+  }, [refreshSetLists, isOnline]);
 
   // Handle deleting a set list
   const handleDeleteSetList = useCallback(async (id: string) => {
+    if (!isOnline) {
+      toast.error('Cannot delete set list while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       // Set list songs will be deleted via cascade
       const { error } = await supabase
@@ -577,12 +802,26 @@ function App() {
       toast.success('Set list deleted successfully');
     } catch (error) {
       console.error('Error deleting set list:', error);
-      toast.error('Failed to delete set list. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to delete set list. Please try again.');
+      }
     }
-  }, []);
+  }, [isOnline]);
 
   // Handle activating/deactivating a set list
   const handleSetActive = useCallback(async (id: string) => {
+    if (!isOnline) {
+      toast.error('Cannot update set list while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       // Get the current set list
       const setList = setLists.find(sl => sl.id === id);
@@ -607,12 +846,26 @@ function App() {
       refreshSetLists();
     } catch (error) {
       console.error('Error toggling set list active state:', error);
-      toast.error('Failed to update set list. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to update set list. Please try again.');
+      }
     }
-  }, [setLists, refreshSetLists]);
+  }, [setLists, refreshSetLists, isOnline]);
 
   // Handle updating logo URL
   const handleLogoUpdate = useCallback(async (url: string) => {
+    if (!isOnline) {
+      toast.error('Cannot update logo while offline. Please check your internet connection.');
+      return;
+    }
+    
     try {
       await updateSettings({
         band_logo_url: url,
@@ -622,9 +875,18 @@ function App() {
       toast.success('Logo updated successfully');
     } catch (error) {
       console.error('Error updating logo:', error);
-      toast.error('Failed to update logo. Please try again.');
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to update logo. Please try again.');
+      }
     }
-  }, [updateSettings]);
+  }, [updateSettings, isOnline]);
 
   // Determine what page to show
   if (isInitializing) {
@@ -643,13 +905,15 @@ function App() {
   // Show kiosk page if accessing /kiosk
   if (isKiosk) {
     return (
-      <KioskPage 
-        songs={songs}
-        requests={requests}
-        activeSetList={activeSetList}
-        logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
-        onSubmitRequest={handleSubmitRequest}
-      />
+      <ErrorBoundary>
+        <KioskPage 
+          songs={songs}
+          requests={requests}
+          activeSetList={activeSetList}
+          logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
+          onSubmitRequest={handleSubmitRequest}
+        />
+      </ErrorBoundary>
     );
   }
 
@@ -659,155 +923,167 @@ function App() {
     const lockedRequest = requests.find(r => r.isLocked && !r.isPlayed);
     
     return (
-      <div className="min-h-screen bg-darker-purple">
-        <div className="max-w-7xl mx-auto p-4 sm:p-6">
-          <header className="mb-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between">
-              <div className="flex items-center mb-4 md:mb-0">
-                <Logo 
-                  url={settings?.band_logo_url || DEFAULT_BAND_LOGO}
-                  className="h-12 mr-4"
-                />
-                <h1 className="text-3xl font-bold neon-text mb-2">
-                  Band Request Hub
-                </h1>
+      <ErrorBoundary>
+        <div className="min-h-screen bg-darker-purple">
+          <div className="max-w-7xl mx-auto p-4 sm:p-6">
+            <header className="mb-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between">
+                <div className="flex items-center mb-4 md:mb-0">
+                  <Logo 
+                    url={settings?.band_logo_url || DEFAULT_BAND_LOGO}
+                    className="h-12 mr-4"
+                  />
+                  <h1 className="text-3xl font-bold neon-text mb-2">
+                    Band Request Hub
+                  </h1>
+                </div>
+                
+                <div className="flex items-center space-x-4">
+                  {!isOnline && (
+                    <div className="px-3 py-1 bg-red-500/20 text-red-400 rounded-md text-sm flex items-center">
+                      <span className="mr-1">●</span>
+                      Offline Mode
+                    </div>
+                  )}
+                  <button 
+                    onClick={navigateToFrontend}
+                    className="neon-button"
+                  >
+                    Exit to Public View
+                  </button>
+                  <button 
+                    onClick={navigateToKiosk}
+                    className="neon-button"
+                  >
+                    Kiosk View
+                  </button>
+                  <button 
+                    onClick={handleAdminLogout}
+                    className="px-4 py-2 text-red-400 hover:bg-red-400/20 rounded-md flex items-center"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </button>
+                </div>
               </div>
               
-              <div className="flex items-center space-x-4">
-                <button 
-                  onClick={navigateToFrontend}
-                  className="neon-button"
-                >
-                  Exit to Public View
-                </button>
-                <button 
-                  onClick={navigateToKiosk}
-                  className="neon-button"
-                >
-                  Kiosk View
-                </button>
-                <button 
-                  onClick={handleAdminLogout}
-                  className="px-4 py-2 text-red-400 hover:bg-red-400/20 rounded-md flex items-center"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Logout
-                </button>
-              </div>
+              <p className="text-gray-300 max-w-2xl mt-2 mb-4">
+                Manage your set lists, song library, and customize the request system all in one place.
+              </p>
+            </header>
+
+            <BackendTabs 
+              activeTab={activeBackendTab}
+              onTabChange={setActiveBackendTab}
+            />
+
+            <div className="space-y-8">
+              {activeBackendTab === 'requests' && (
+                <ErrorBoundary>
+                  <div className="glass-effect rounded-lg p-6">
+                    <h2 className="text-xl font-semibold neon-text mb-4">Current Request Queue</h2>
+                    <QueueView 
+                      requests={requests}
+                      onLockRequest={handleLockRequest}
+                      onMarkPlayed={handleMarkPlayed}
+                      onResetQueue={handleResetQueue}
+                    />
+                  </div>
+
+                  <ErrorBoundary>
+                    <TickerManager 
+                      nextSong={lockedRequest
+                        ? {
+                            title: lockedRequest.title,
+                            artist: lockedRequest.artist
+                          }
+                        : undefined
+                      }
+                      isActive={isTickerActive}
+                      customMessage={tickerMessage}
+                      onUpdateMessage={setTickerMessage}
+                      onToggleActive={() => setIsTickerActive(!isTickerActive)}
+                    />
+                  </ErrorBoundary>
+                </ErrorBoundary>
+              )}
+
+              {activeBackendTab === 'setlists' && (
+                <ErrorBoundary>
+                  <SetListManager 
+                    songs={songs}
+                    setLists={setLists}
+                    onCreateSetList={handleCreateSetList}
+                    onUpdateSetList={handleUpdateSetList}
+                    onDeleteSetList={handleDeleteSetList}
+                    onSetActive={handleSetActive}
+                  />
+                </ErrorBoundary>
+              )}
+
+              {activeBackendTab === 'songs' && (
+                <ErrorBoundary>
+                  <SongLibrary 
+                    songs={songs}
+                    onAddSong={handleAddSong}
+                    onUpdateSong={handleUpdateSong}
+                    onDeleteSong={handleDeleteSong}
+                  />
+                </ErrorBoundary>
+              )}
+
+              {activeBackendTab === 'settings' && (
+                <>
+                  <ErrorBoundary>
+                    <LogoManager 
+                      isAdmin={isAdmin}
+                      currentLogoUrl={settings?.band_logo_url || null}
+                      onLogoUpdate={handleLogoUpdate}
+                    />
+                  </ErrorBoundary>
+
+                  <ErrorBoundary>
+                    <ColorCustomizer isAdmin={isAdmin} />
+                  </ErrorBoundary>
+
+                  <ErrorBoundary>
+                    <SettingsManager />
+                  </ErrorBoundary>
+                </>
+              )}
             </div>
-            
-            <p className="text-gray-300 max-w-2xl mt-2 mb-4">
-              Manage your set lists, song library, and customize the request system all in one place.
-            </p>
-          </header>
-
-          <BackendTabs 
-            activeTab={activeBackendTab}
-            onTabChange={setActiveBackendTab}
-          />
-
-          <div className="space-y-8">
-            {activeBackendTab === 'requests' && (
-              <ErrorBoundary>
-                <div className="glass-effect rounded-lg p-6">
-                  <h2 className="text-xl font-semibold neon-text mb-4">Current Request Queue</h2>
-                  <QueueView 
-                    requests={requests}
-                    onLockRequest={handleLockRequest}
-                    onMarkPlayed={handleMarkPlayed}
-                    onResetQueue={handleResetQueue}
-                  />
-                </div>
-
-                <ErrorBoundary>
-                  <TickerManager 
-                    nextSong={lockedRequest
-                      ? {
-                          title: lockedRequest.title,
-                          artist: lockedRequest.artist
-                        }
-                      : undefined
-                    }
-                    isActive={isTickerActive}
-                    customMessage={tickerMessage}
-                    onUpdateMessage={setTickerMessage}
-                    onToggleActive={() => setIsTickerActive(!isTickerActive)}
-                  />
-                </ErrorBoundary>
-              </ErrorBoundary>
-            )}
-
-            {activeBackendTab === 'setlists' && (
-              <ErrorBoundary>
-                <SetListManager 
-                  songs={songs}
-                  setLists={setLists}
-                  onCreateSetList={handleCreateSetList}
-                  onUpdateSetList={handleUpdateSetList}
-                  onDeleteSetList={handleDeleteSetList}
-                  onSetActive={handleSetActive}
-                />
-              </ErrorBoundary>
-            )}
-
-            {activeBackendTab === 'songs' && (
-              <ErrorBoundary>
-                <SongLibrary 
-                  songs={songs}
-                  onAddSong={handleAddSong}
-                  onUpdateSong={handleUpdateSong}
-                  onDeleteSong={handleDeleteSong}
-                />
-              </ErrorBoundary>
-            )}
-
-            {activeBackendTab === 'settings' && (
-              <>
-                <ErrorBoundary>
-                  <LogoManager 
-                    isAdmin={isAdmin}
-                    currentLogoUrl={settings?.band_logo_url || null}
-                    onLogoUpdate={handleLogoUpdate}
-                  />
-                </ErrorBoundary>
-
-                <ErrorBoundary>
-                  <ColorCustomizer isAdmin={isAdmin} />
-                </ErrorBoundary>
-
-                <ErrorBoundary>
-                  <SettingsManager />
-                </ErrorBoundary>
-              </>
-            )}
           </div>
         </div>
-      </div>
+      </ErrorBoundary>
     );
   }
 
   // Show landing page if no user is set up
   if (!currentUser) {
     return (
-      <LandingPage onComplete={handleUserUpdate} />
+      <ErrorBoundary>
+        <LandingPage onComplete={handleUserUpdate} />
+      </ErrorBoundary>
     );
   }
 
   // Show main frontend
   return (
-    <UserFrontend 
-      songs={songs}
-      requests={requests}
-      activeSetList={activeSetList}
-      currentUser={currentUser}
-      onSubmitRequest={handleSubmitRequest}
-      onVoteRequest={handleVoteRequest}
-      onUpdateUser={handleUserUpdate}
-      logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
-      isAdmin={isAdmin}
-      onLogoClick={onLogoClick}
-      onBackendAccess={navigateToBackend}
-    />
+    <ErrorBoundary>
+      <UserFrontend 
+        songs={songs}
+        requests={requests}
+        activeSetList={activeSetList}
+        currentUser={currentUser}
+        onSubmitRequest={handleSubmitRequest}
+        onVoteRequest={handleVoteRequest}
+        onUpdateUser={handleUserUpdate}
+        logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
+        isAdmin={isAdmin}
+        onLogoClick={onLogoClick}
+        onBackendAccess={navigateToBackend}
+      />
+    </ErrorBoundary>
   );
 }
 
