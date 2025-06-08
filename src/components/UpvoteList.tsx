@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Music4, ThumbsUp, UserCircle } from 'lucide-react';
 import { useUiSettings } from '../hooks/useUiSettings';
 import { supabase } from '../utils/supabase';
@@ -19,11 +19,33 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
   const [scrollProgress, setScrollProgress] = useState(0);
   const [votedRequests, setVotedRequests] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [optimisticVotes, setOptimisticVotes] = useState<Map<string, number>>(new Map());
   
   // Debug log when requests change
   useEffect(() => {
     console.log('🔄 UpvoteList requests updated:', requests.length, requests.map(r => r.id));
   }, [requests]);
+
+  // Clear optimistic votes when real data arrives
+  useEffect(() => {
+    if (optimisticVotes.size === 0) return;
+    
+    // Check if server data matches our optimistic updates
+    let needsClearing = true;
+    
+    for (const [requestId, optimisticCount] of optimisticVotes.entries()) {
+      const serverRequest = requests.find(r => r.id === requestId);
+      if (!serverRequest || serverRequest.votes !== optimisticCount) {
+        needsClearing = false;
+        break;
+      }
+    }
+    
+    if (needsClearing) {
+      console.log('✅ Clearing optimistic votes - server state matches');
+      setOptimisticVotes(new Map());
+    }
+  }, [requests, optimisticVotes]);
 
   // Fetch user's votes
   useEffect(() => {
@@ -82,20 +104,75 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
     if (!currentUserId || votedRequests.has(id)) return;
 
     try {
+      // Find the current request
+      const request = requests.find(r => r.id === id);
+      if (!request) return;
+      
+      // Apply optimistic update
+      const currentVotes = request.votes || 0;
+      const newVoteCount = currentVotes + 1;
+      
+      // Update optimistic votes
+      setOptimisticVotes(prev => {
+        const newMap = new Map(prev);
+        newMap.set(id, newVoteCount);
+        return newMap;
+      });
+      
+      // Update local voted state
+      setVotedRequests(prev => new Set([...prev, id]));
+      
+      // Make the actual API call
       const success = await onVote(id);
-      if (success) {
-        // Update local state - the database insertion is handled by the parent's onVote handler
-        setVotedRequests(prev => new Set([...prev, id]));
+      
+      if (!success) {
+        // Revert optimistic updates on failure
+        setOptimisticVotes(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(id);
+          return newMap;
+        });
+        
+        setVotedRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
       }
     } catch (error) {
       console.error('Error recording vote:', error);
+      
+      // Revert optimistic updates on error
+      setOptimisticVotes(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(id);
+        return newMap;
+      });
+      
+      setVotedRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
     }
   };
 
   // Filter out played requests and sort by votes
-  const activeRequests = requests
-    .filter(request => !request.isPlayed)
-    .sort((a, b) => {
+  const activeRequests = useMemo(() => {
+    // Apply optimistic votes to the requests
+    const requestsWithOptimisticVotes = requests.map(request => {
+      if (optimisticVotes.has(request.id)) {
+        return {
+          ...request,
+          votes: optimisticVotes.get(request.id) || request.votes
+        };
+      }
+      return request;
+    });
+    
+    return requestsWithOptimisticVotes
+      .filter(request => !request.isPlayed)
+      .sort((a, b) => {
       // Locked requests always go first
       if (a.isLocked) return -1;
       if (b.isLocked) return 1;
@@ -103,6 +180,7 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
       // Then sort by votes
       return (b.votes || 0) - (a.votes || 0);
     });
+  }, [requests, optimisticVotes]);
 
   if (isLoading) {
     return (
@@ -229,7 +307,7 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
                   style={{ backgroundColor: `${accentColor}20` }}
                 >
                   <span className="text-xs" style={{ color: accentColor }}>
-                    {request.votes || 0}
+                    {optimisticVotes.has(request.id) ? optimisticVotes.get(request.id) : (request.votes || 0)}
                   </span>
                 </div>
 

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ThumbsUp, Lock, CheckCircle2, ChevronDown, ChevronUp, Users, UserCircle } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { useUiSettings } from '../hooks/useUiSettings';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useCallback } from 'react';
 import { format } from 'date-fns';
+import toast from 'react-hot-toast';
 import type { SongRequest } from '../types';
 
 interface QueueViewProps {
@@ -26,6 +27,16 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
   const [expandedRequests, setExpandedRequests] = useState<Set<string>>(new Set());
   const [isResetting, setIsResetting] = useState(false);
   const [optimisticLocks, setOptimisticLocks] = useState<Set<string>>(new Set());
+  
+  // Track if component is mounted
+  const mountedRef = useRef(true);
+  
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   
   // Debug log when requests change
   useEffect(() => {
@@ -189,56 +200,54 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
   }, [deduplicatedRequests, optimisticLocks]);
 
   const handleLockRequest = useCallback(async (id: string) => {
+    if (!mountedRef.current) return;
+    
     setLockingStates(prev => new Set([...prev, id]));
     
-    try {
-      // Get the current request
-      const request = requests.find(r => r.id === id);
-      if (!request) throw new Error('Request not found');
-      
-      // Toggle the locked status
-      const newLockedState = !request.isLocked;
-      
-      // INSTANT OPTIMISTIC UPDATE - update UI immediately
-      setOptimisticLocks(prev => {
-        const newSet = new Set();
-        if (newLockedState) {
-          newSet.add(id); // Only this request is locked
-        }
-        return newSet;
-      });
-      
-      // First unlock all other requests
-      const { error: unlockError } = await supabase
-        .from('requests')
-        .update({ is_locked: false })
-        .neq('id', id);
-      
-      if (unlockError) throw unlockError;
-      
-      // Then update this request's lock status
-      const { error } = await supabase
-        .from('requests')
-        .update({ is_locked: newLockedState })
-        .eq('id', id);
-        
-      if (error) throw error;
+    // Get the current request
+    const request = requests.find(r => r.id === id);
+    if (!request) return;
+    
+    // Toggle the locked status
+    const newLockedState = !request.isLocked;
+    
+    // INSTANT OPTIMISTIC UPDATE - update UI immediately
+    setOptimisticLocks(prev => {
+      const newSet = new Set();
+      if (newLockedState) {
+        newSet.add(id); // Only this request is locked
+      }
+      return newSet;
+    });
+    
+    // Get the current request
+    const request = requests.find(r => r.id === id);
+      // Use the atomic database function for better performance
+      if (newLockedState) {
+        // Lock this request (and unlock all others)
+        const { error } = await supabase.rpc('lock_request', { request_id: id });
+        if (error) throw error;
+      } else {
+        // Just unlock this request
+        const { error } = await supabase.rpc('unlock_request', { request_id: id });
+        if (error) throw error;
+      }
       
       console.log('✅ Lock status updated in database');
+      
+      // Show success toast
+      toast.success(newLockedState ? 'Request locked as next song' : 'Request unlocked');
     } catch (error) {
       console.error('❌ Error updating lock status:', error);
       
       // REVERT optimistic update on error
       setOptimisticLocks(new Set());
-      
-      if (error instanceof Error && (
-        error.message.includes('Failed to fetch') || 
-        error.message.includes('NetworkError') ||
-        error.message.includes('network'))
-      ) {
-        toast.error('Network error. Please check your connection and try again.');
-      } else {
+
+      // Show error toast
+      if (typeof toast !== 'undefined') {
         toast.error('Failed to update request. Please try again.');
+      } else {
+        alert('Failed to update request. Please try again.');
       }
     } finally {
       setTimeout(() => {
@@ -249,7 +258,7 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
         });
       }, 300);
     }
-  }, [requests]);
+  }, [requests, mountedRef]);
   
   // Toggle expanded/collapsed state for a request
   const toggleRequestExpanded = (id: string) => {
