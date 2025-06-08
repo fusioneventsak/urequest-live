@@ -26,6 +26,7 @@ import { TickerManager } from './components/TickerManager';
 import { BackendTabs } from './components/BackendTabs';
 import { LandingPage } from './components/LandingPage';
 import { Logo } from './components/shared/Logo';
+import { ConnectionStatus } from './components/ConnectionStatus';
 import { KioskPage } from './components/KioskPage';
 
 const DEFAULT_BAND_LOGO = "https://www.fusion-events.ca/wp-content/uploads/2025/03/ulr-wordmark.png";
@@ -433,25 +434,60 @@ function App() {
         throw new Error('You must be logged in to vote');
       }
 
-      // Single atomic database call instead of multiple operations
-      const { data, error } = await supabase.rpc('add_vote', {
-        p_request_id: id,
-        p_user_id: currentUser.id || currentUser.name
-      });
+      // Check if user already voted
+      const { data: existingVote, error: checkError } = await supabase
+        .from('user_votes')
+        .select('id')
+        .eq('request_id', id)
+        .eq('user_id', currentUser.id || currentUser.name)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (checkError && checkError.code !== 'PGRST116') { // Not found is ok
+        throw checkError;
+      }
 
-      if (data === false) {
+      if (existingVote) {
         toast.error('You have already voted for this request');
         return false;
       }
+
+      // Get current votes
+      const { data, error: getError } = await supabase
+        .from('requests')
+        .select('votes')
+        .eq('id', id)
+        .single();
+        
+      if (getError) throw getError;
+      
+      // Update votes count
+      const currentVotes = data?.votes || 0;
+      const { error: updateError } = await supabase
+        .from('requests')
+        .update({ votes: currentVotes + 1 })
+        .eq('id', id);
+        
+      if (updateError) throw updateError;
+      
+      // Record vote to prevent duplicates
+      const { error: voteError } = await supabase
+        .from('user_votes')
+        .insert({
+          request_id: id,
+          user_id: currentUser.id || currentUser.name,
+          created_at: new Date().toISOString()
+        });
+        
+      if (voteError) throw voteError;
         
       toast.success('Vote added!');
       return true;
     } catch (error) {
       console.error('Error voting for request:', error);
       
-      if (error instanceof Error && (
+      if (error instanceof Error && error.message.includes('already voted')) {
+        toast.error(error.message);
+      } else if (error instanceof Error && (
         error.message.includes('Failed to fetch') || 
         error.message.includes('NetworkError') ||
         error.message.includes('network'))
@@ -839,41 +875,4 @@ function App() {
       
       toast.success('Logo updated successfully');
     } catch (error) {
-      console.error('Error updating logo:', error);
-      
-      if (error instanceof Error && (
-        error.message.includes('Failed to fetch') || 
-        error.message.includes('NetworkError') ||
-        error.message.includes('network'))
-      ) {
-        toast.error('Network error. Please check your connection and try again.');
-      } else {
-        toast.error('Failed to update logo. Please try again.');
-      }
-    }
-  }, [updateSettings, isOnline]);
-
-  // Determine what page to show
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen bg-darker-purple flex items-center justify-center">
-        <LoadingSpinner size="lg\" message="Loading application..." />
-      </div>
-    );
-  }
-
-  // Show login page if accessing backend and not authenticated
-  if (isBackend && !isAdmin) {
-    return <BackendLogin onLogin={handleAdminLogin} />;
-  }
-
-  // Show kiosk page if accessing /kiosk
-  if (isKiosk) {
-    return (
-      <ErrorBoundary>
-        <KioskPage 
-          songs={songs}
-          requests={requests}
-          activeSetList={activeSetList}
-          logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
-          onSubmitRequest={handleSubmitRequest}
+      console.error('Error updating
