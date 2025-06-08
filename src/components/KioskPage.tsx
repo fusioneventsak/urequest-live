@@ -293,7 +293,7 @@ export function KioskPage({
         <div className="flex-1 overflow-y-auto px-6 pb-24">
           {isSubmitting && !selectedSong ? (
             <div className="flex items-center justify-center h-full">
-              <LoadingSpinner size="lg" message="Processing..." />
+              <LoadingSpinner size="lg\" message="Processing..." />
             </div>
           ) : activeTab === 'requests' ? (
             filteredSongs.length > 0 ? (
@@ -377,7 +377,7 @@ export function KioskPage({
             ) : (
               <div className="text-center p-8 text-gray-400">
                 {searchTerm ? (
-                  <>No songs found matching "<span className="text-white">{searchTerm}</span>"</>
+                  <>No songs found matching "<span className=\"text-white">{searchTerm}</span>"</>
                 ) : (
                   <>No songs available to request</>
                 )}
