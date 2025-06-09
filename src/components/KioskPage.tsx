@@ -372,7 +372,7 @@ export function KioskPage({
             ) : (
               <div className="text-center p-8 text-gray-400">
                 {searchTerm ? (
-                  <>No songs found matching "<span className="text-white">{searchTerm}</span>"</>
+                  <>No songs found matching <span className="text-white">{searchTerm}</span></>
                 ) : (
                   <>No songs available to request</>
                 )}
