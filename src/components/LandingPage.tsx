@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, User as UserIcon, AlertTriangle, UserCircle } from 'lucide-react';
-import { resizeAndCompressImage } from '../utils/imageUtils';
+import { Camera, User as UserIcon, AlertTriangle, UserCircle } from 'lucide-react';
+import { resizeAndCompressImage, getOptimalCameraConstraints, getOptimalFileInputAccept, supportsHighQualityCapture } from '../utils/imageUtils';
 import type { User } from '../types';
 
 interface LandingPageProps {
@@ -8,8 +8,9 @@ interface LandingPageProps {
   initialUser?: User | null;
 }
 
-// Consistent with App.tsx MAX_PHOTO_SIZE
-const MAX_PHOTO_SIZE = 300 * 1024; // 300KB limit for photos (increased from 100KB)
+// Increased limit to handle smartphone photos after compression
+const MAX_PHOTO_SIZE = 1024 * 1024; // 1MB limit for compressed photos (up from 300KB)
+const MAX_INPUT_SIZE = 50 * 1024 * 1024; // 50MB max input size (supports all major phone brands)
 
 export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
   const [name, setName] = useState(initialUser?.name || '');
@@ -19,17 +20,22 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Get optimal camera constraints based on device
+      const constraints = getOptimalCameraConstraints();
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setIsCapturing(true);
+        setErrorMessage(null);
       }
     } catch (err) {
       console.error('Error accessing camera:', err);
-      setErrorMessage('Could not access camera. Please check your permissions or try uploading a photo instead.');
+      setErrorMessage('Could not access camera. Please check your permissions or try uploading a photo from your gallery instead.');
     }
   };
 
@@ -41,25 +47,25 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
         
         const context = canvasRef.current.getContext('2d');
         if (context) {
-          // Set dimensions for the capture
-          const width = 200; // Increased from 150 for better quality
+          // Set dimensions for the capture - higher resolution for better quality
+          const width = 600; // Increased for better quality on all devices
           const height = (videoRef.current.videoHeight / videoRef.current.videoWidth) * width;
           
           canvasRef.current.width = width;
           canvasRef.current.height = height;
           context.drawImage(videoRef.current, 0, 0, width, height);
           
-          const photoData = canvasRef.current.toDataURL('image/jpeg', 0.7); // Increased quality from 0.5
+          const photoData = canvasRef.current.toDataURL('image/jpeg', 0.9); // High quality initial capture
           
           try {
-            const compressedPhoto = await resizeAndCompressImage(photoData, 200, 200, 0.7); // Higher quality
+            const compressedPhoto = await resizeAndCompressImage(photoData, 300, 300, 0.8);
             
             // Verify compressed photo size before accepting
             const base64Length = compressedPhoto.length - (compressedPhoto.indexOf(',') + 1);
             const size = (base64Length * 3) / 4;
             
             if (size > MAX_PHOTO_SIZE) {
-              setErrorMessage(`Image is too large (${Math.round(size/1024)}KB). Maximum size is 300KB. Please try again with a smaller image.`);
+              setErrorMessage(`Image is too large (${Math.round(size/1024)}KB). Maximum size is ${Math.round(MAX_PHOTO_SIZE/1024)}KB. Please try again.`);
               return;
             }
             
@@ -69,13 +75,13 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
             if (error instanceof Error) {
               setErrorMessage(error.message);
             } else {
-              setErrorMessage('Error processing your photo. Please try again with a smaller image.');
+              setErrorMessage('Error processing your photo. Please try again.');
             }
           }
         }
       } catch (error) {
         console.error('Error capturing photo:', error);
-        setErrorMessage('Error processing your photo. Please try again or upload a smaller image.');
+        setErrorMessage('Error processing your photo. Please try again.');
       } finally {
         setIsProcessing(false);
       }
@@ -98,23 +104,24 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
         setIsProcessing(true);
         setErrorMessage(null);
         
-        // Check file size before processing
-        if (file.size > MAX_PHOTO_SIZE) {
-          setErrorMessage(`Image is too large (${Math.round(file.size/1024)}KB). Please select an image under 300KB.`);
+        // Check if file is too large to process (before compression)
+        if (file.size > MAX_INPUT_SIZE) {
+          setErrorMessage(`Image file is too large (${Math.round(file.size/(1024*1024))}MB). Please select an image under ${Math.round(MAX_INPUT_SIZE/(1024*1024))}MB.`);
           return;
         }
         
         const reader = new FileReader();
         reader.onloadend = async () => {
           try {
-            const compressedPhoto = await resizeAndCompressImage(reader.result as string, 200, 200, 0.7);
+            // Use higher resolution and quality for compression to maintain image quality
+            const compressedPhoto = await resizeAndCompressImage(reader.result as string, 300, 300, 0.8);
             
             // Verify compressed photo size before accepting
             const base64Length = compressedPhoto.length - (compressedPhoto.indexOf(',') + 1);
             const size = (base64Length * 3) / 4;
             
             if (size > MAX_PHOTO_SIZE) {
-              setErrorMessage(`Image is still too large (${Math.round(size/1024)}KB). Maximum size is 300KB. Please try again with a smaller image.`);
+              setErrorMessage(`Image is still too large after compression (${Math.round(size/1024)}KB). Maximum size is ${Math.round(MAX_PHOTO_SIZE/1024)}KB. Please try a different image.`);
               return;
             }
             
@@ -142,6 +149,26 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
     }
   };
 
+  // Combined photo upload handler that gives option for camera or file
+  const handlePhotoAction = () => {
+    // Check if device supports camera
+    const supportsCamera = supportsHighQualityCapture();
+    
+    if (supportsCamera) {
+      // On mobile devices, show options
+      const action = window.confirm('Would you like to take a photo with your camera? Click OK for camera, Cancel to choose from your photo gallery.');
+      
+      if (action) {
+        startCamera();
+      } else {
+        fileInputRef.current?.click();
+      }
+    } else {
+      // On desktop, just open file picker
+      fileInputRef.current?.click();
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -159,7 +186,7 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
       const size = (base64Length * 3) / 4;
       
       if (size > MAX_PHOTO_SIZE) {
-        setErrorMessage(`Photo is too large (${Math.round(size/1024)}KB). Maximum size is 300KB. Please try again with a smaller image.`);
+        setErrorMessage(`Photo is too large (${Math.round(size/1024)}KB). Maximum size is ${Math.round(MAX_PHOTO_SIZE/1024)}KB. Please try again with a smaller image.`);
         return;
       }
     }
@@ -244,21 +271,30 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
                   playsInline
                   className="w-full rounded-lg neon-border"
                 />
-                <button
-                  type="button"
-                  onClick={capturePhoto}
-                  disabled={isProcessing}
-                  className="neon-button w-full flex items-center justify-center"
-                >
-                  {isProcessing ? (
-                    <span>Processing...</span>
-                  ) : (
-                    <>
-                      <Camera className="w-4 h-4 mr-2" />
-                      Take Photo
-                    </>
-                  )}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    disabled={isProcessing}
+                    className="flex-1 neon-button flex items-center justify-center"
+                  >
+                    {isProcessing ? (
+                      <span>Processing...</span>
+                    ) : (
+                      <>
+                        <Camera className="w-4 h-4 mr-2" />
+                        Take Photo
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="px-4 py-2 text-sm text-neon-pink hover:text-white transition-colors border border-neon-pink/30 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : photo ? (
               <div className="space-y-4">
@@ -272,7 +308,7 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
                   onClick={() => setPhoto('')}
                   className="w-full px-4 py-2 text-sm text-neon-pink hover:text-white transition-colors"
                 >
-                  Take Another Photo
+                  Remove Photo
                 </button>
               </div>
             ) : (
@@ -283,33 +319,30 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
                 <p className="text-center text-gray-400 text-sm">
                   No photo selected. A default avatar will be created for you.
                 </p>
-                <div className="flex gap-4">
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    disabled={isProcessing}
-                    className="flex-1 neon-button flex items-center justify-center"
-                  >
-                    <Camera className="w-4 h-4 mr-2" />
-                    Take Photo
-                  </button>
-                  <label className={`flex-1 flex items-center justify-center px-4 py-2 bg-neon-purple/10 text-white rounded-md hover:bg-neon-purple/20 cursor-pointer transition-colors border border-neon-purple/20 ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Upload Photo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      disabled={isProcessing}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
+                <button
+                  type="button"
+                  onClick={handlePhotoAction}
+                  disabled={isProcessing}
+                  className="w-full neon-button flex items-center justify-center"
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  {isProcessing ? 'Processing...' : 'Add Photo'}
+                </button>
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={getOptimalFileInputAccept()}
+                  capture="environment"
+                  onChange={handleFileUpload}
+                  disabled={isProcessing}
+                  className="hidden"
+                />
               </div>
             )}
             <canvas ref={canvasRef} className="hidden" />
             <p className="text-xs text-gray-400 mt-2">
-              For best results, use a small image (under 300KB). Images will be resized and compressed automatically.
+              All smartphone photos supported (iPhone, Samsung, Google Pixel, etc.). Images will be automatically compressed to save space.
             </p>
           </div>
 
