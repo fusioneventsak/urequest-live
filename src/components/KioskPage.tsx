@@ -5,7 +5,6 @@ import { useUiSettings } from '../hooks/useUiSettings';
 import { Logo } from './shared/Logo';
 import { Ticker } from './Ticker';
 import { LoadingSpinner } from './shared/LoadingSpinner';
-import { ConnectionStatus } from './ConnectionStatus';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import { UpvoteList } from './UpvoteList';
 import QRCode from 'qrcode.react';
@@ -210,10 +209,6 @@ export function KioskPage({
           className="px-6 pt-10 pb-4 text-center relative"
           style={{ backgroundColor: headerBgColor }}
         >
-          <div className="absolute left-4 top-4">
-            <ConnectionStatus />
-          </div>
-          
           {settings?.show_qr_code && (
             <div className="absolute right-4 top-4 p-2 bg-white rounded-lg shadow-md">
               <QRCode 
@@ -293,7 +288,7 @@ export function KioskPage({
         <div className="flex-1 overflow-y-auto px-6 pb-24">
           {isSubmitting && !selectedSong ? (
             <div className="flex items-center justify-center h-full">
-             <LoadingSpinner size="lg" message="Processing..." />
+              <LoadingSpinner size="lg" message="Processing..." />
             </div>
           ) : activeTab === 'requests' ? (
             filteredSongs.length > 0 ? (
@@ -377,7 +372,7 @@ export function KioskPage({
             ) : (
               <div className="text-center p-8 text-gray-400">
                 {searchTerm ? (
-                  <>No songs found matching "<span className=\"text-white">{searchTerm}</span>"</>
+                  <>No songs found matching "<span className="text-white">{searchTerm}</span>"</>
                 ) : (
                   <>No songs available to request</>
                 )}
@@ -620,5 +615,3 @@ export function KioskPage({
     </ErrorBoundary>
   );
 }
-
-export { KioskPage }
