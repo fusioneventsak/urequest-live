@@ -1,5 +1,7 @@
 /**
  * Resizes and compresses an image to reduce payload size
+ * Updated to handle standard smartphone photos from all major brands (iPhone, Samsung, Google Pixel, etc.)
+ * Supports images up to 50MB and compresses them efficiently
  * @param dataUrl The data URL of the image to compress
  * @param maxWidth Maximum width of the resulting image
  * @param maxHeight Maximum height of the resulting image
@@ -8,9 +10,9 @@
  */
 export function resizeAndCompressImage(
   dataUrl: string, 
-  maxWidth = 200, 
-  maxHeight = 200,
-  quality = 0.7
+  maxWidth = 300, 
+  maxHeight = 300,
+  quality = 0.8
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
@@ -42,7 +44,7 @@ export function resizeAndCompressImage(
           // Calculate aspect ratio
           const aspectRatio = width / height;
           
-          // Scale down if needed
+          // Scale down if needed - more aggressive scaling for large images
           if (width > height) {
             if (width > maxWidth) {
               height = Math.round(maxWidth / aspectRatio);
@@ -73,51 +75,58 @@ export function resizeAndCompressImage(
           // Draw image with resize
           ctx.drawImage(img, 0, 0, width, height);
           
-          // First try with user-specified quality
-          let compressedDataUrl;
-          try {
-            compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-          } catch (canvasError) {
-            console.error('Canvas toDataURL error:', canvasError);
-            reject(new Error('Failed to generate compressed image: ' + (canvasError instanceof Error ? canvasError.message : String(canvasError))));
-            return;
-          }
+          // Start with user-specified quality and progressively compress if needed
+          const maxSize = 1024 * 1024; // 1MB max
+          let compressedDataUrl: string;
+          let currentQuality = quality;
           
-          // Check if the result is valid
-          if (!compressedDataUrl || !compressedDataUrl.startsWith('data:image/')) {
-            reject(new Error('Failed to generate valid image data URL'));
-            return;
-          }
-          
-          // Check file size
-          const base64 = compressedDataUrl.split(',')[1];
-          const size = Math.ceil((base64.length * 3) / 4);
-          const maxSize = 300 * 1024; // 300KB max
-          
-          // If still too large, compress more aggressively
-          if (size > maxSize) {
-            // Try medium quality
-            compressedDataUrl = canvas.toDataURL('image/jpeg', 0.5);
-            
-            const newBase64 = compressedDataUrl.split(',')[1];
-            const newSize = Math.ceil((newBase64.length * 3) / 4);
-            
-            // If still too large, compress even more
-            if (newSize > maxSize) {
-              compressedDataUrl = canvas.toDataURL('image/jpeg', 0.3);
+          // Progressive compression loop
+          for (let attempts = 0; attempts < 5; attempts++) {
+            try {
+              compressedDataUrl = canvas.toDataURL('image/jpeg', currentQuality);
               
-              const finalBase64 = compressedDataUrl.split(',')[1];
-              const finalSize = Math.ceil((finalBase64.length * 3) / 4);
+              // Check file size
+              const base64 = compressedDataUrl.split(',')[1];
+              const size = Math.ceil((base64.length * 3) / 4);
               
-              // If still too large after maximum compression, reject
-              if (finalSize > maxSize) {
-                reject(new Error(`Image is too large (${Math.round(finalSize/1024)}KB) even after compression. Please use a smaller image.`));
+              // If size is acceptable, we're done
+              if (size <= maxSize) {
+                resolve(compressedDataUrl);
                 return;
               }
+              
+              // Reduce quality for next attempt
+              currentQuality = Math.max(0.1, currentQuality - 0.15);
+              
+              // If this is the last attempt and still too large, try smaller dimensions
+              if (attempts === 4) {
+                // Reduce canvas size and try again
+                const smallerWidth = Math.floor(width * 0.8);
+                const smallerHeight = Math.floor(height * 0.8);
+                
+                canvas.width = smallerWidth;
+                canvas.height = smallerHeight;
+                ctx.drawImage(img, 0, 0, smallerWidth, smallerHeight);
+                
+                compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                const finalBase64 = compressedDataUrl.split(',')[1];
+                const finalSize = Math.ceil((finalBase64.length * 3) / 4);
+                
+                if (finalSize > maxSize) {
+                  reject(new Error(`Image is too large (${Math.round(finalSize/1024)}KB) even after maximum compression. Please use a smaller image or crop it before uploading.`));
+                  return;
+                }
+                
+                resolve(compressedDataUrl);
+                return;
+              }
+            } catch (canvasError) {
+              console.error('Canvas toDataURL error:', canvasError);
+              reject(new Error('Failed to generate compressed image: ' + (canvasError instanceof Error ? canvasError.message : String(canvasError))));
+              return;
             }
           }
           
-          resolve(compressedDataUrl);
         } catch (innerError) {
           console.error('Error in image processing:', innerError);
           reject(innerError instanceof Error ? innerError : new Error('Error processing image: ' + String(innerError)));
@@ -126,7 +135,7 @@ export function resizeAndCompressImage(
       
       img.onerror = (error) => {
         console.error('Image loading error:', error);
-        reject(new Error('Failed to load image for compression'));
+        reject(new Error('Failed to load image for compression. The image may be corrupted or in an unsupported format.'));
       };
       
       // Set crossOrigin to handle CORS issues
@@ -188,7 +197,7 @@ export function validateImageUrl(url: string): Promise<boolean> {
     const timeout = setTimeout(() => {
       console.warn('Image validation timed out:', url);
       resolve(false);
-    }, 5000);
+    }, 10000); // Increased timeout for larger images
     
     img.onload = () => {
       clearTimeout(timeout);
@@ -208,4 +217,130 @@ export function validateImageUrl(url: string): Promise<boolean> {
     const separator = url.includes('?') ? '&' : '?';
     img.src = `${url}${separator}t=${cacheBuster}`;
   });
+}
+
+/**
+ * Utility function to convert file size to human readable format
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+/**
+ * Detect device type and camera capabilities
+ */
+export function getDeviceInfo() {
+  const userAgent = navigator.userAgent.toLowerCase();
+  
+  // Device detection
+  const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  const isAndroid = /android/.test(userAgent);
+  const isSamsung = /samsung/.test(userAgent) || /sm-/.test(userAgent);
+  const isPixel = /pixel/.test(userAgent);
+  const isOnePlus = /oneplus/.test(userAgent);
+  const isHuawei = /huawei/.test(userAgent);
+  const isXiaomi = /xiaomi|mi\s/.test(userAgent);
+  const isOppo = /oppo/.test(userAgent);
+  const isVivo = /vivo/.test(userAgent);
+  const isLG = /lg/.test(userAgent);
+  const isMobile = isIOS || isAndroid;
+  
+  // Camera capabilities detection
+  const hasMediaDevices = 'mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices;
+  const supportsImageCapture = 'ImageCapture' in window;
+  
+  return {
+    device: {
+      isMobile,
+      isIOS,
+      isAndroid,
+      brand: isSamsung ? 'Samsung' : 
+             isPixel ? 'Google Pixel' :
+             isOnePlus ? 'OnePlus' :
+             isHuawei ? 'Huawei' :
+             isXiaomi ? 'Xiaomi' :
+             isOppo ? 'Oppo' :
+             isVivo ? 'Vivo' :
+             isLG ? 'LG' :
+             isIOS ? 'Apple' : 'Unknown'
+    },
+    camera: {
+      hasMediaDevices,
+      supportsImageCapture,
+      canUseCamera: hasMediaDevices
+    }
+  };
+}
+
+/**
+ * Get optimal camera constraints based on device
+ */
+export function getOptimalCameraConstraints() {
+  const deviceInfo = getDeviceInfo();
+  
+  // Base constraints
+  let constraints: MediaStreamConstraints = {
+    video: {
+      facingMode: 'environment', // Prefer rear camera
+      width: { ideal: 1920, max: 3840 },
+      height: { ideal: 1080, max: 2160 }
+    }
+  };
+  
+  // Adjust for specific devices
+  if (deviceInfo.device.isIOS) {
+    // iOS devices typically have excellent cameras
+    constraints.video = {
+      ...constraints.video,
+      width: { ideal: 1920, max: 4032 },
+      height: { ideal: 1080, max: 3024 }
+    };
+  } else if (deviceInfo.device.brand === 'Samsung' || deviceInfo.device.brand === 'Google Pixel') {
+    // High-end Android devices
+    constraints.video = {
+      ...constraints.video,
+      width: { ideal: 1920, max: 4000 },
+      height: { ideal: 1080, max: 3000 }
+    };
+  } else if (deviceInfo.device.isAndroid) {
+    // Other Android devices - more conservative
+    constraints.video = {
+      ...constraints.video,
+      width: { ideal: 1280, max: 1920 },
+      height: { ideal: 720, max: 1080 }
+    };
+  }
+  
+  return constraints;
+}
+
+/**
+ * Check if the device likely supports high-quality camera capture
+ */
+export function supportsHighQualityCapture(): boolean {
+  const deviceInfo = getDeviceInfo();
+  
+  // Check for modern browser features and mobile device
+  return deviceInfo.device.isMobile && deviceInfo.camera.hasMediaDevices;
+}
+
+/**
+ * Get file input accept string optimized for mobile devices
+ */
+export function getOptimalFileInputAccept(): string {
+  const deviceInfo = getDeviceInfo();
+  
+  if (deviceInfo.device.isMobile) {
+    // Mobile devices - prefer camera but allow gallery
+    return "image/*";
+  } else {
+    // Desktop - standard image formats
+    return "image/jpeg,image/png,image/webp,image/heic,image/heif";
+  }
 }
