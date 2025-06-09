@@ -31,7 +31,7 @@ import { KioskPage } from './components/KioskPage';
 const DEFAULT_BAND_LOGO = "https://www.fusion-events.ca/wp-content/uploads/2025/03/ulr-wordmark.png";
 const BACKEND_PATH = "backend";
 const KIOSK_PATH = "kiosk";
-const MAX_PHOTO_SIZE = 300 * 1024; // 300KB limit for photos
+const MAX_PHOTO_SIZE = 250 * 1024; // 250KB limit for database storage
 const MAX_REQUEST_RETRIES = 3;
 
 function App() {
@@ -69,6 +69,89 @@ function App() {
   const { isLoading: isFetchingSongs } = useSongSync(setSongs);
   const { isLoading: isFetchingRequests, reconnect: reconnectRequests } = useRequestSync(setRequests);
   const { isLoading: isFetchingSetLists, refetch: refreshSetLists } = useSetListSync(setSetLists);
+
+  // Enhanced photo compression function with aggressive compression for database storage
+  const compressPhoto = useCallback((file: File, maxSizeKB: number = 200): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          // More aggressive size limits for database storage
+          const maxWidth = 400;  // Reduced from 800
+          const maxHeight = 400; // Reduced from 800
+          let { width, height } = img;
+
+          // Calculate new dimensions maintaining aspect ratio
+          if (width > height) {
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = (width * maxHeight) / height;
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          // Draw with better quality settings
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
+          }
+
+          // Start with lower quality and be more aggressive
+          let quality = 0.7; // Start lower
+          let result: string;
+
+          do {
+            result = canvas.toDataURL('image/jpeg', quality);
+            const sizeKB = (result.length * 3) / 4 / 1024;
+            
+            console.log(`Compression attempt: ${Math.round(sizeKB)}KB at quality ${quality.toFixed(2)}`);
+            
+            if (sizeKB <= maxSizeKB || quality <= 0.05) {
+              break;
+            }
+            
+            quality -= 0.05; // Smaller steps for more precision
+          } while (quality > 0.05);
+
+          const finalSizeKB = (result.length * 3) / 4 / 1024;
+          console.log(`Final compressed size: ${Math.round(finalSizeKB)}KB`);
+
+          // If still too large, try WebP format (better compression)
+          if (finalSizeKB > maxSizeKB) {
+            quality = 0.6;
+            do {
+              result = canvas.toDataURL('image/webp', quality);
+              const sizeKB = (result.length * 3) / 4 / 1024;
+              
+              if (sizeKB <= maxSizeKB || quality <= 0.1) {
+                break;
+              }
+              
+              quality -= 0.1;
+            } while (quality > 0.1);
+          }
+
+          resolve(result);
+        } catch (error) {
+          reject(new Error('Failed to compress image'));
+        }
+      };
+
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = URL.createObjectURL(file);
+    });
+  }, []);
 
   // Global error handler for unhandled promise rejections
   useEffect(() => {
@@ -247,15 +330,72 @@ function App() {
     toast.success('Logged out successfully');
   }, [navigateToFrontend]);
   
-  // Handle user update
-  const handleUserUpdate = useCallback((user: User) => {
-    setCurrentUser(user);
+  // Handle user update with enhanced photo support
+  const handleUserUpdate = useCallback(async (user: User, photoFile?: File) => {
     try {
-      localStorage.setItem('currentUser', JSON.stringify(user));
-    } catch (e) {
-      console.error('Error saving user to localStorage:', e);
+      let finalUser = { ...user };
+
+      // Handle photo upload if provided
+      if (photoFile) {
+        try {
+          // Validate file type
+          const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+          if (!allowedTypes.includes(photoFile.type)) {
+            throw new Error('Please select a JPEG, PNG, or WebP image file');
+          }
+
+          // Check file size (10MB limit before compression)
+          if (photoFile.size > 10 * 1024 * 1024) {
+            throw new Error('Image file is too large. Please select an image smaller than 10MB');
+          }
+
+          // Compress the photo to 200KB limit for database storage
+          const compressedPhoto = await compressPhoto(photoFile, 200);
+          finalUser.photo = compressedPhoto;
+
+          toast.success('📱 Photo uploaded and optimized for database storage!');
+        } catch (photoError) {
+          console.error('Photo processing error:', photoError);
+          toast.error(photoError instanceof Error ? photoError.message : 'Failed to process photo');
+          return;
+        }
+      }
+
+      // Validate final user data
+      if (!finalUser.name.trim()) {
+        toast.error('Please enter your name');
+        return;
+      }
+
+      // Enhanced photo size validation for database storage
+      if (finalUser.photo && finalUser.photo.startsWith('data:')) {
+        const base64Length = finalUser.photo.length - (finalUser.photo.indexOf(',') + 1);
+        const sizeKB = (base64Length * 3) / 4 / 1024;
+        
+        // 250KB limit for database storage
+        if (sizeKB > 250) {
+          toast.error(`Profile photo is too large (${Math.round(sizeKB)}KB). Maximum size is 250KB for database storage.`);
+          return;
+        }
+      }
+
+      // Update user state and save to localStorage
+      setCurrentUser(finalUser);
+      
+      try {
+        localStorage.setItem('currentUser', JSON.stringify(finalUser));
+      } catch (e) {
+        console.error('Error saving user to localStorage:', e);
+        // Still proceed even if localStorage fails
+        toast.warning('Profile updated but could not be saved locally');
+      }
+      
+      toast.success('Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating user:', error);
+      toast.error('Failed to update profile. Please try again.');
     }
-  }, []);
+  }, [compressPhoto]);
 
   // Handle logo click
   const onLogoClick = useCallback(() => {
@@ -286,7 +426,7 @@ function App() {
     return `data:image/svg+xml;base64,${btoa(svg)}`;
   };
 
-  // Handle song request submission with retry logic
+  // Handle song request submission with retry logic and enhanced photo support
   const handleSubmitRequest = useCallback(async (data: RequestFormData): Promise<boolean> => {
     if (requestInProgressRef.current) {
       console.log('Request already in progress, please wait...');
@@ -299,9 +439,15 @@ function App() {
     try {
       console.log('Submitting request:', data);
       
-      // Validate photo size if provided
-      if (data.userPhoto && data.userPhoto.length > MAX_PHOTO_SIZE) {
-        throw new Error('Profile photo is too large. Please use a smaller image (max 300KB).');
+      // Enhanced photo size validation for database storage
+      if (data.userPhoto && data.userPhoto.startsWith('data:')) {
+        const base64Length = data.userPhoto.length - (data.userPhoto.indexOf(',') + 1);
+        const sizeKB = (base64Length * 3) / 4 / 1024;
+        
+        // 250KB limit for database storage
+        if (sizeKB > 250) {
+          throw new Error(`Your profile photo is too large (${Math.round(sizeKB)}KB). Please go back and update your profile with a smaller image (max 250KB).`);
+        }
       }
 
       // First check if the song is already requested - use maybeSingle() instead of single()
@@ -419,7 +565,7 @@ function App() {
     } finally {
       requestInProgressRef.current = false;
     }
-  }, [reconnectRequests]);
+  }, [reconnectRequests, compressPhoto]);
 
   // Handle request vote with error handling
   const handleVoteRequest = useCallback(async (id: string): Promise<boolean> => {
@@ -892,7 +1038,7 @@ function App() {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-darker-purple flex items-center justify-center">
-        <LoadingSpinner size="lg\" message="Loading application..." />
+        <LoadingSpinner size="lg" message="Loading application..." />
       </div>
     );
   }
