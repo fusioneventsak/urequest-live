@@ -131,27 +131,27 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
 
             {/* Center content: Clean vertical layout for mobile */}
             <div className="flex items-center space-x-6">
-              {/* Clean Album Art */}
+              {/* Bigger Album Art with Accent Border */}
               <div className="flex-shrink-0">
                 {nextSong.albumArtUrl ? (
                   <img
                     src={nextSong.albumArtUrl}
                     alt="Album art"
-                    className="w-12 h-12 rounded-lg object-cover"
+                    className="w-16 h-16 rounded-lg object-cover"
                     style={{ 
                       boxShadow: `0 4px 20px ${accentColor}40`,
-                      border: `1px solid ${accentColor}30`
+                      border: `2px solid ${accentColor}`
                     }}
                   />
                 ) : (
                   <div 
-                    className="w-12 h-12 rounded-lg flex items-center justify-center"
+                    className="w-16 h-16 rounded-lg flex items-center justify-center"
                     style={{ 
                       background: `linear-gradient(135deg, ${accentColor}20, ${secondaryColor}20)`,
-                      border: `1px solid ${accentColor}30`
+                      border: `2px solid ${accentColor}`
                     }}
                   >
-                    <Music className="w-5 h-5" style={{ color: accentColor }} />
+                    <Music className="w-7 h-7" style={{ color: accentColor }} />
                   </div>
                 )}
               </div>
