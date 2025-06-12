@@ -213,13 +213,6 @@ export function RequestModal({
           </div>
         </form>
 
-        {/* Updated notice to reflect thumbnail usage */}
-        <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
-          <p className="text-blue-300 text-xs flex items-center">
-            <span className="mr-1.5">📱</span>
-            Your photo will appear as a thumbnail with your request in the queue.
-          </p>
-        </div>
       </div>
     </div>
   );
