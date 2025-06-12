@@ -104,17 +104,17 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
       {/* Centered Content Container - extra wide for horizontal layout */}
       <div className="max-w-8xl w-full px-12 relative z-10">
         {customMessage ? (
-          <div className="flex items-center justify-center space-x-4">
-            {/* Pulsing icon */}
+          <div className="flex items-center justify-center space-x-3">
+            {/* Smaller pulsing icon for mobile */}
             <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center relative flex-shrink-0"
+              className="w-8 h-8 rounded-full flex items-center justify-center relative flex-shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${accentColor}, ${secondaryColor})`,
-                boxShadow: `0 0 20px ${accentColor}60`,
+                boxShadow: `0 0 15px ${accentColor}50`,
                 animation: 'iconPulse 2s ease-in-out infinite'
               }}
             >
-              <Volume2 className="w-5 h-5 text-white" />
+              <Volume2 className="w-4 h-4 text-white" />
               
               {/* Ripple effect */}
               <div 
@@ -133,33 +133,41 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: `0 0 30px ${accentColor}80`,
+                textShadow: `0 0 20px ${accentColor}60`,
                 animation: 'textShimmer 3s ease-in-out infinite',
-                fontSize: `${customMessage.length > 60 ? '12px' : 
-                            customMessage.length > 45 ? '14px' : 
-                            customMessage.length > 35 ? '16px' :
-                            customMessage.length > 25 ? '18px' :
-                            customMessage.length > 20 ? '20px' :
-                            customMessage.length > 15 ? '22px' : '24px'}`,
-                maxWidth: 'calc(100vw - 120px)',
+                fontSize: `${customMessage.length > 80 ? '8px' : 
+                            customMessage.length > 70 ? '9px' : 
+                            customMessage.length > 60 ? '10px' : 
+                            customMessage.length > 50 ? '11px' :
+                            customMessage.length > 40 ? '12px' :
+                            customMessage.length > 30 ? '14px' :
+                            customMessage.length > 25 ? '16px' :
+                            customMessage.length > 20 ? '18px' :
+                            customMessage.length > 15 ? '20px' :
+                            customMessage.length > 10 ? '22px' : '24px'}`,
+                maxWidth: 'calc(100vw - 80px)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                lineHeight: '1.2'
+                lineHeight: '1.1',
+                letterSpacing: `${customMessage.length > 50 ? '-0.5px' : 
+                               customMessage.length > 30 ? '0px' : '0.5px'}`
               }}
             >
               {customMessage}
             </div>
 
-            {/* Audio visualizer bars */}
-            <div className="flex items-center space-x-1 flex-shrink-0">
-              {[...Array(4)].map((_, i) => (
+            {/* Compact audio visualizer bars */}
+            <div className="flex items-center space-x-0.5 flex-shrink-0">
+              {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
                   className="sound-wave"
                   style={{
                     background: `linear-gradient(to top, ${accentColor}, ${secondaryColor})`,
-                    animationDelay: `${i * 0.15}s`
+                    animationDelay: `${i * 0.2}s`,
+                    width: '2px',
+                    height: '16px'
                   }}
                 />
               ))}
