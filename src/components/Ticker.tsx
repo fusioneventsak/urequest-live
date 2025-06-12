@@ -104,26 +104,17 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
       {/* Centered Content Container - extra wide for horizontal layout */}
       <div className="max-w-8xl w-full px-12 relative z-10">
         {customMessage ? (
-          <div className="flex items-center justify-center space-x-3">
-            {/* Smaller pulsing icon for mobile */}
+          <div className="flex items-center justify-center space-x-2">
+            {/* Micro pulsing icon for mobile */}
             <div 
-              className="w-8 h-8 rounded-full flex items-center justify-center relative flex-shrink-0"
+              className="w-6 h-6 rounded-full flex items-center justify-center relative flex-shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${accentColor}, ${secondaryColor})`,
-                boxShadow: `0 0 15px ${accentColor}50`,
+                boxShadow: `0 0 10px ${accentColor}40`,
                 animation: 'iconPulse 2s ease-in-out infinite'
               }}
             >
-              <Volume2 className="w-4 h-4 text-white" />
-              
-              {/* Ripple effect */}
-              <div 
-                className="absolute inset-0 rounded-full border-2 opacity-60"
-                style={{
-                  borderColor: accentColor,
-                  animation: 'ripple 2s ease-out infinite'
-                }}
-              />
+              <Volume2 className="w-3 h-3 text-white" />
             </div>
             
             <div 
@@ -133,41 +124,46 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                textShadow: `0 0 20px ${accentColor}60`,
+                textShadow: `0 0 15px ${accentColor}50`,
                 animation: 'textShimmer 3s ease-in-out infinite',
-                fontSize: `${customMessage.length > 80 ? '8px' : 
+                fontSize: `${customMessage.length > 100 ? '6px' : 
+                            customMessage.length > 90 ? '7px' : 
+                            customMessage.length > 80 ? '8px' : 
                             customMessage.length > 70 ? '9px' : 
                             customMessage.length > 60 ? '10px' : 
                             customMessage.length > 50 ? '11px' :
                             customMessage.length > 40 ? '12px' :
-                            customMessage.length > 30 ? '14px' :
-                            customMessage.length > 25 ? '16px' :
-                            customMessage.length > 20 ? '18px' :
-                            customMessage.length > 15 ? '20px' :
-                            customMessage.length > 10 ? '22px' : '24px'}`,
-                maxWidth: 'calc(100vw - 80px)',
+                            customMessage.length > 30 ? '13px' :
+                            customMessage.length > 25 ? '14px' :
+                            customMessage.length > 20 ? '16px' :
+                            customMessage.length > 15 ? '18px' :
+                            customMessage.length > 10 ? '20px' : '22px'}`,
+                maxWidth: 'calc(100vw - 50px)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                lineHeight: '1.1',
-                letterSpacing: `${customMessage.length > 50 ? '-0.5px' : 
-                               customMessage.length > 30 ? '0px' : '0.5px'}`
+                lineHeight: '1.0',
+                letterSpacing: `${customMessage.length > 70 ? '-1px' : 
+                               customMessage.length > 50 ? '-0.5px' : 
+                               customMessage.length > 30 ? '0px' : '0.3px'}`,
+                fontWeight: `${customMessage.length > 60 ? '600' : '700'}`
               }}
             >
               {customMessage}
             </div>
 
-            {/* Compact audio visualizer bars */}
-            <div className="flex items-center space-x-0.5 flex-shrink-0">
-              {[...Array(3)].map((_, i) => (
+            {/* Ultra-compact audio visualizer */}
+            <div className="flex items-center flex-shrink-0">
+              {[...Array(2)].map((_, i) => (
                 <div
                   key={i}
                   className="sound-wave"
                   style={{
                     background: `linear-gradient(to top, ${accentColor}, ${secondaryColor})`,
-                    animationDelay: `${i * 0.2}s`,
+                    animationDelay: `${i * 0.3}s`,
                     width: '2px',
-                    height: '16px'
+                    height: '12px',
+                    marginRight: i === 0 ? '1px' : '0'
                   }}
                 />
               ))}
