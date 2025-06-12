@@ -129,15 +129,15 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               ))}
             </div>
 
-            {/* Center content: Clean horizontal layout */}
-            <div className="flex items-center space-x-8">
+            {/* Center content: Clean vertical layout for mobile */}
+            <div className="flex items-center space-x-6">
               {/* Clean Album Art */}
               <div className="flex-shrink-0">
                 {nextSong.albumArtUrl ? (
                   <img
                     src={nextSong.albumArtUrl}
                     alt="Album art"
-                    className="w-14 h-14 rounded-lg object-cover"
+                    className="w-12 h-12 rounded-lg object-cover"
                     style={{ 
                       boxShadow: `0 4px 20px ${accentColor}40`,
                       border: `1px solid ${accentColor}30`
@@ -145,48 +145,51 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   />
                 ) : (
                   <div 
-                    className="w-14 h-14 rounded-lg flex items-center justify-center"
+                    className="w-12 h-12 rounded-lg flex items-center justify-center"
                     style={{ 
                       background: `linear-gradient(135deg, ${accentColor}20, ${secondaryColor}20)`,
                       border: `1px solid ${accentColor}30`
                     }}
                   >
-                    <Music className="w-6 h-6" style={{ color: accentColor }} />
+                    <Music className="w-5 h-5" style={{ color: accentColor }} />
                   </div>
                 )}
               </div>
 
-              {/* Clean Badge */}
-              <span 
-                className="text-sm font-semibold tracking-wide px-4 py-1.5 rounded-full whitespace-nowrap"
-                style={{ 
-                  background: `linear-gradient(90deg, ${accentColor}25, ${secondaryColor}25)`,
-                  color: 'white',
-                  border: `1px solid ${accentColor}40`,
-                  backdropFilter: 'blur(10px)'
-                }}
-              >
-                NEXT UP
-              </span>
-              
-              {/* Clean Song Info */}
-              <div className="flex flex-col justify-center min-w-0">
-                <h3 
-                  className="text-lg font-bold tracking-wide whitespace-nowrap text-white"
-                  style={{
-                    textShadow: `0 2px 10px ${accentColor}60`
+              {/* Compact Badge + Song Info Stacked */}
+              <div className="flex flex-col justify-center space-y-1 min-w-0">
+                {/* Smaller Next Up Badge */}
+                <span 
+                  className="text-xs font-semibold tracking-wide px-3 py-1 rounded-full whitespace-nowrap self-start"
+                  style={{ 
+                    background: `linear-gradient(90deg, ${accentColor}25, ${secondaryColor}25)`,
+                    color: 'white',
+                    border: `1px solid ${accentColor}40`,
+                    backdropFilter: 'blur(10px)'
                   }}
                 >
-                  {nextSong.title}
-                </h3>
-                {nextSong.artist && (
-                  <p 
-                    className="text-sm text-gray-300 font-medium whitespace-nowrap"
-                    style={{ textShadow: `0 1px 5px ${secondaryColor}40` }}
+                  NEXT UP
+                </span>
+                
+                {/* Song Info Below Badge */}
+                <div className="flex flex-col">
+                  <h3 
+                    className="text-base font-bold tracking-wide whitespace-nowrap text-white leading-tight"
+                    style={{
+                      textShadow: `0 2px 10px ${accentColor}60`
+                    }}
                   >
-                    {nextSong.artist}
-                  </p>
-                )}
+                    {nextSong.title}
+                  </h3>
+                  {nextSong.artist && (
+                    <p 
+                      className="text-xs text-gray-300 font-medium whitespace-nowrap leading-tight"
+                      style={{ textShadow: `0 1px 5px ${secondaryColor}40` }}
+                    >
+                      {nextSong.artist}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
