@@ -25,7 +25,8 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
         justifyContent: "center",
         position: "relative",
         animation: "logoGlow 2s ease-in-out infinite",
-        marginBottom: "1.5rem" // Added explicit margin to ensure proper spacing
+       marginBottom: "1.5rem", // Added explicit margin to ensure proper spacing
+       maxWidth: "100%" // Ensure logo container doesn't overflow
       }}
     >
       <img 
@@ -33,7 +34,7 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
         alt="Logo" 
         className="frontend-logo"
         style={{
-          maxHeight: "200px", 
+         maxHeight: "100%", 
           width: "auto",
           height: "auto",
           display: "block",
@@ -41,6 +42,7 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
           filter: `drop-shadow(0 0 15px ${accentColor}80)`,
           position: "relative",
           zIndex: 1,
+         maxWidth: "100%" // Ensure image doesn't overflow its container
         }}
         onError={handleError}
       />
