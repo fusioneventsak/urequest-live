@@ -6,7 +6,7 @@ import { useRealtimeSubscription } from './useRealtimeSubscription';
 import type { SongRequest } from '../types';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
-const FETCH_DEBOUNCE_TIME = 100; // Reduced from 500ms to 100ms
+const FETCH_DEBOUNCE_TIME = 50; // Reduced from 100ms to 50ms
 const FETCH_TIMEOUT = 15000; // 15 seconds
 
 export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) => void) {
@@ -22,10 +22,21 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
   // Use the realtime connection hook
   const { isConnected, reconnect } = useRealtimeConnection();
   
-  // Create a safe callback for realtime updates
+  // Create a safe callback for realtime updates with priority handling
   const handleRealtimeUpdate = useCallback((payload: any) => {
-    console.log('Realtime update received:', payload.eventType);
-    fetchRequests(true);
+    console.log('Realtime update received:', payload.eventType, payload.table);
+    
+    // For lock/unlock updates, bypass debouncing for instant response
+    const isLockUpdate = payload.new?.is_locked !== payload.old?.is_locked;
+    const isStatusUpdate = payload.new?.status !== payload.old?.status;
+    const isUrgentUpdate = isLockUpdate || isStatusUpdate;
+    
+    if (isUrgentUpdate) {
+      console.log('🚨 Urgent update detected - bypassing debounce');
+      fetchRequests(true, true); // true for bypassCache, true for bypassDebounce
+    } else {
+      fetchRequests(true); // Normal debounced update
+    }
   }, []);
   
   // Use the realtime subscription hook for requests
@@ -60,8 +71,8 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
     return abortControllerRef.current.signal;
   }, []);
   
-  // Fetch requests with debouncing and caching
-  const fetchRequests = useCallback(async (bypassCache = false) => {
+  // Fetch requests with optional debouncing bypass for urgent updates
+  const fetchRequests = useCallback(async (bypassCache = false, bypassDebounce = false) => {
     if (!mountedRef.current) return;
     
     // Don't allow concurrent fetches
@@ -70,9 +81,9 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
       return;
     }
     
-    // Debounce frequent calls
+    // Debounce frequent calls unless bypassed for urgent updates
     const now = Date.now();
-    if (!bypassCache && now - lastFetchTimeRef.current < FETCH_DEBOUNCE_TIME) {
+    if (!bypassCache && !bypassDebounce && now - lastFetchTimeRef.current < FETCH_DEBOUNCE_TIME) {
       console.log('Debouncing request fetch...');
       
       // Clear any existing timeout
@@ -82,7 +93,7 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
       
       // Set a new timeout to fetch after debounce period
       fetchTimeoutRef.current = setTimeout(() => {
-        fetchRequests(bypassCache);
+        fetchRequests(bypassCache, false);
       }, FETCH_DEBOUNCE_TIME);
       
       return;
@@ -204,7 +215,7 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
     const handleOnline = () => {
       console.log('Network connection restored');
       setIsOnline(true);
-      fetchRequests(true);
+      fetchRequests(true, true); // Bypass both cache and debounce when coming online
     };
     
     const handleOffline = () => {
@@ -268,8 +279,8 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
     // Reconnect realtime
     await reconnect();
     
-    // Fetch fresh data
-    fetchRequests(true);
+    // Fetch fresh data with urgent priority
+    fetchRequests(true, true);
   }, [reconnect, fetchRequests]);
   
   return {
@@ -277,7 +288,7 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
     error,
     isOnline,
     isConnected,
-    refetch: (bypassCache = true) => fetchRequests(bypassCache),
+    refetch: (bypassCache = true) => fetchRequests(bypassCache, true), // Always bypass debounce for manual refetch
     reconnect: manualReconnect
   };
 }
