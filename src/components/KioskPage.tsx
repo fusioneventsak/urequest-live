@@ -213,7 +213,9 @@ export function KioskPage({
               style={{
                 borderColor: accentColor,
                 boxShadow: `0 0 10px ${accentColor}40, 0 4px 15px rgba(0,0,0,0.2)`,
-                background: `linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.9))`,
+                background: `linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))`,
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
                 width: 'fit-content'
               }}
             >
@@ -221,12 +223,17 @@ export function KioskPage({
                 <QRCode 
                   value={currentUrl} 
                   size={100} 
-                  bgColor="#ffffff"
+                  bgColor="rgba(255,255,255,0.95)"
                   fgColor="#000000"
                   level="L"
                   includeMargin={false}
                 />
-                <div className="text-black text-xs font-bold tracking-wide uppercase mt-2">
+                <div className="text-white text-xs font-bold tracking-wide uppercase mt-2"
+                  style={{ 
+                    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                    color: 'white'
+                  }}
+                >
                   Scan to Request
                 </div>
                 <div className="flex items-center justify-center mt-1">
@@ -236,8 +243,11 @@ export function KioskPage({
                       boxShadow: `0 0 6px ${accentColor}`
                     }}
                   />
-                  <div className="text-xs font-medium"
-                    style={{ color: accentColor }}
+                  <div className="text-xs font-medium text-white"
+                    style={{ 
+                      textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                      color: 'white'
+                    }}
                   >
                     LIVE
                   </div>
@@ -246,16 +256,28 @@ export function KioskPage({
               
               {/* Corner decorations */}
               <div className="absolute top-0.5 left-0.5 w-2 h-2 border-l border-t rounded-tl"
-                style={{ borderColor: accentColor }}
+                style={{ 
+                  borderColor: accentColor,
+                  opacity: 0.8
+                }}
               />
               <div className="absolute top-0.5 right-0.5 w-2 h-2 border-r border-t rounded-tr"
-                style={{ borderColor: accentColor }}
+                style={{ 
+                  borderColor: accentColor,
+                  opacity: 0.8
+                }}
               />
               <div className="absolute bottom-0.5 left-0.5 w-2 h-2 border-l border-b rounded-bl"
-                style={{ borderColor: accentColor }}
+                style={{ 
+                  borderColor: accentColor,
+                  opacity: 0.8
+                }}
               />
               <div className="absolute bottom-0.5 right-0.5 w-2 h-2 border-r border-b rounded-br"
-                style={{ borderColor: accentColor }}
+                style={{ 
+                  borderColor: accentColor,
+                  opacity: 0.8
+                }}
               />
             </div>
           )}
