@@ -388,8 +388,7 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
                       }}
                       title="Mark as Played"
                     >
-                      <CheckCircle2 className="w-5 h-5 mr-1" />
-                      <span className="text-xs font-medium tracking-wide">PLAYED</span>
+                      <CheckCircle2 className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
