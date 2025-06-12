@@ -31,43 +31,10 @@ export function TickerManager({
     setLocalMessage(customMessage);
   }, [customMessage]);
 
-  // Debounced message update function
-  const handleMessageUpdate = async (message: string) => {
-    try {
-      setIsUpdating(true);
-      
-      // Update parent component state
-      onUpdateMessage(message);
-      
-      // Update database
-      await updateSettings({
-        custom_message: message,
-        ticker_active: message.trim() !== '' ? isActive : false,
-        updated_at: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error updating custom message:', error);
-      // Revert local message on error
-      setLocalMessage(customMessage);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  // Handle input changes with debouncing
+  // Handle input changes - LOCAL ONLY, no auto-saving
   const handleInputChange = (newValue: string) => {
-    // Update local state immediately for responsive UI
+    // Only update local state - no database updates
     setLocalMessage(newValue);
-    
-    // Clear existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    
-    // Debounce the actual database update
-    timeoutRef.current = setTimeout(() => {
-      handleMessageUpdate(newValue);
-    }, 500); // Wait 500ms after user stops typing
   };
 
   const handleToggleActive = async () => {
@@ -87,10 +54,13 @@ export function TickerManager({
           updated_at: new Date().toISOString()
         });
       } else {
-        // STARTING: Only activate if there's a message
+        // STARTING: Send the message and activate
         if (localMessage.trim()) {
+          // Update parent state with the current message
+          onUpdateMessage(localMessage);
           onToggleActive();
           
+          // Send to database
           await updateSettings({
             custom_message: localMessage,
             ticker_active: true,
@@ -112,11 +82,6 @@ export function TickerManager({
   const clearMessage = async () => {
     try {
       setIsUpdating(true);
-      
-      // Clear timeout if pending
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
       
       // Clear everything immediately
       setLocalMessage('');
@@ -244,7 +209,7 @@ export function TickerManager({
             />
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-400">
-                {isUpdating ? 'Saving changes...' : 'Changes save automatically after you stop typing'}
+                Type your message, then click "Start Custom Message" to send it live
               </p>
               <p className="text-xs text-gray-500">
                 {localMessage.length} characters
@@ -271,9 +236,10 @@ export function TickerManager({
                 fontStyle: (!isActive || !localMessage) ? 'italic' : 'normal',
                 color: (!isActive || !localMessage) ? '#9ca3af' : 'white'
               }}>
-                {isActive && localMessage ? localMessage : (nextSong
+                {isActive && customMessage ? customMessage : (localMessage && !isActive ? 
+                  `Preview: ${localMessage}` : (nextSong
                   ? `🎵 Coming Up Next: ${nextSong.title}${nextSong.artist ? ` by ${nextSong.artist}` : ''} 🎵`
-                  : 'No content to display'
+                  : 'No content to display')
                 )}
               </p>
             </div>
