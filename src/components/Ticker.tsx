@@ -101,20 +101,20 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
         }}
       />
 
-      {/* Centered Content Container - extra wide for horizontal layout */}
-      <div className="max-w-8xl w-full px-12 relative z-10">
+      {/* Centered Content Container */}
+      <div className="max-w-6xl w-full px-6 relative z-10">
         {customMessage ? (
-          <div className="flex items-center justify-center space-x-2">
-            {/* Micro pulsing icon for mobile */}
+          <div className="flex items-center justify-center space-x-3">
+            {/* Icon for mobile - better sized */}
             <div 
-              className="w-6 h-6 rounded-full flex items-center justify-center relative flex-shrink-0"
+              className="w-7 h-7 rounded-full flex items-center justify-center relative flex-shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${accentColor}, ${secondaryColor})`,
-                boxShadow: `0 0 10px ${accentColor}40`,
+                boxShadow: `0 0 12px ${accentColor}50`,
                 animation: 'iconPulse 2s ease-in-out infinite'
               }}
             >
-              <Volume2 className="w-3 h-3 text-white" />
+              <Volume2 className="w-4 h-4 text-white" />
             </div>
             
             <div 
@@ -126,51 +126,47 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                 backgroundClip: 'text',
                 textShadow: `0 0 15px ${accentColor}50`,
                 animation: 'textShimmer 3s ease-in-out infinite',
-                fontSize: `${customMessage.length > 100 ? '6px' : 
-                            customMessage.length > 90 ? '7px' : 
-                            customMessage.length > 80 ? '8px' : 
-                            customMessage.length > 70 ? '9px' : 
-                            customMessage.length > 60 ? '10px' : 
-                            customMessage.length > 50 ? '11px' :
-                            customMessage.length > 40 ? '12px' :
-                            customMessage.length > 30 ? '13px' :
-                            customMessage.length > 25 ? '14px' :
-                            customMessage.length > 20 ? '16px' :
+                // More reasonable mobile sizing - less aggressive
+                fontSize: `${customMessage.length > 120 ? '11px' : 
+                            customMessage.length > 100 ? '12px' : 
+                            customMessage.length > 80 ? '13px' : 
+                            customMessage.length > 60 ? '14px' : 
+                            customMessage.length > 40 ? '15px' :
+                            customMessage.length > 30 ? '16px' :
+                            customMessage.length > 20 ? '17px' :
                             customMessage.length > 15 ? '18px' :
-                            customMessage.length > 10 ? '20px' : '22px'}`,
-                maxWidth: 'calc(100vw - 50px)',
+                            customMessage.length > 10 ? '19px' : '20px'}`,
+                maxWidth: 'calc(100vw - 120px)', // More space for text
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                lineHeight: '1.0',
-                letterSpacing: `${customMessage.length > 70 ? '-1px' : 
-                               customMessage.length > 50 ? '-0.5px' : 
-                               customMessage.length > 30 ? '0px' : '0.3px'}`,
-                fontWeight: `${customMessage.length > 60 ? '600' : '700'}`
+                lineHeight: '1.1',
+                letterSpacing: `${customMessage.length > 80 ? '-0.5px' : 
+                               customMessage.length > 50 ? '0px' : '0.2px'}`,
+                fontWeight: `${customMessage.length > 80 ? '600' : '700'}`
               }}
             >
               {customMessage}
             </div>
 
-            {/* Ultra-compact audio visualizer */}
-            <div className="flex items-center flex-shrink-0">
-              {[...Array(2)].map((_, i) => (
+            {/* Compact audio visualizer - better positioned */}
+            <div className="flex items-center space-x-0.5 flex-shrink-0">
+              {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
                   className="sound-wave"
                   style={{
                     background: `linear-gradient(to top, ${accentColor}, ${secondaryColor})`,
-                    animationDelay: `${i * 0.3}s`,
-                    width: '2px',
-                    height: '12px',
-                    marginRight: i === 0 ? '1px' : '0'
+                    animationDelay: `${i * 0.2}s`,
+                    width: '2.5px',
+                    height: '14px'
                   }}
                 />
               ))}
             </div>
           </div>
         ) : nextSong && (
-            <div className="flex items-center justify-center space-x-12">
+          <div className="flex items-center justify-center space-x-8">
             {/* Audio visualizer - left side */}
             <div className="flex items-center space-x-1 flex-shrink-0">
               {[...Array(4)].map((_, i) => (
@@ -185,15 +181,15 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               ))}
             </div>
 
-            {/* Center content: Clean vertical layout for mobile */}
-            <div className="flex items-center space-x-6">
-              {/* Bigger Album Art with Accent Border */}
+            {/* Center content: Better mobile layout */}
+            <div className="flex items-center space-x-4">
+              {/* Album Art with better sizing */}
               <div className="flex-shrink-0">
                 {nextSong.albumArtUrl ? (
                   <img
                     src={nextSong.albumArtUrl}
                     alt="Album art"
-                    className="w-16 h-16 rounded-lg object-cover"
+                    className="w-14 h-14 rounded-lg object-cover"
                     style={{ 
                       boxShadow: `0 4px 20px ${accentColor}40`,
                       border: `2px solid ${accentColor}`
@@ -201,44 +197,45 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   />
                 ) : (
                   <div 
-                    className="w-16 h-16 rounded-lg flex items-center justify-center"
+                    className="w-14 h-14 rounded-lg flex items-center justify-center"
                     style={{ 
                       background: `linear-gradient(135deg, ${accentColor}20, ${secondaryColor}20)`,
                       border: `2px solid ${accentColor}`
                     }}
                   >
-                    <Music className="w-7 h-7" style={{ color: accentColor }} />
+                    <Music className="w-6 h-6" style={{ color: accentColor }} />
                   </div>
                 )}
               </div>
 
-              {/* Compact Badge + Song Info Stacked - Mobile Optimized */}
-              <div className="flex flex-col justify-center items-center space-y-1.5 min-w-0">
-                {/* Tiny Next Up Badge Above - Mobile Safe */}
+              {/* Song Info - Better mobile sizing */}
+              <div className="flex flex-col justify-center space-y-1 min-w-0">
+                {/* Next Up Badge - Better sized for mobile */}
                 <span 
-                  className="text-xs font-normal tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap opacity-80 flex-shrink-0"
+                  className="text-xs font-medium tracking-wide px-2 py-0.5 rounded whitespace-nowrap opacity-90 flex-shrink-0 self-center"
                   style={{ 
-                    background: `linear-gradient(90deg, ${accentColor}20, ${secondaryColor}20)`,
+                    background: `linear-gradient(90deg, ${accentColor}25, ${secondaryColor}25)`,
                     color: 'white',
-                    border: `1px solid ${accentColor}30`,
-                    fontSize: '9px'
+                    border: `1px solid ${accentColor}40`,
+                    fontSize: '10px'
                   }}
                 >
                   NEXT UP
                 </span>
 
-                {/* Song Info Below - Mobile Responsive */}
-                <div className="flex flex-col items-center -space-y-1">
+                {/* Song Title and Artist - Better mobile sizing */}
+                <div className="flex flex-col items-center space-y-0.5">
                   <h3 
                     className="font-bold tracking-wide text-white leading-tight text-center whitespace-nowrap"
                     style={{
                       textShadow: `0 2px 10px ${accentColor}60`,
-                      fontSize: `${nextSong.title.length > 40 ? '10px' : 
-                                  nextSong.title.length > 30 ? '12px' : 
-                                  nextSong.title.length > 25 ? '14px' :
-                                  nextSong.title.length > 20 ? '15px' : 
-                                  nextSong.title.length > 15 ? '16px' : '18px'}`,
-                      maxWidth: 'calc(100vw - 250px)',
+                      // Less aggressive mobile sizing
+                      fontSize: `${nextSong.title.length > 50 ? '12px' : 
+                                  nextSong.title.length > 35 ? '14px' : 
+                                  nextSong.title.length > 25 ? '15px' :
+                                  nextSong.title.length > 20 ? '16px' : 
+                                  nextSong.title.length > 15 ? '17px' : '18px'}`,
+                      maxWidth: 'calc(100vw - 200px)', // More space for text
                       overflow: 'hidden',
                       textOverflow: 'ellipsis'
                     }}
@@ -250,11 +247,12 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                       className="text-gray-300 font-medium leading-tight text-center whitespace-nowrap"
                       style={{ 
                         textShadow: `0 1px 5px ${secondaryColor}40`,
-                        fontSize: `${nextSong.artist.length > 35 ? '8px' : 
-                                    nextSong.artist.length > 25 ? '9px' :
-                                    nextSong.artist.length > 20 ? '10px' :
-                                    nextSong.artist.length > 15 ? '11px' : '12px'}`,
-                        maxWidth: 'calc(100vw - 250px)',
+                        // Better mobile sizing for artist
+                        fontSize: `${nextSong.artist.length > 40 ? '10px' : 
+                                    nextSong.artist.length > 30 ? '11px' :
+                                    nextSong.artist.length > 20 ? '12px' :
+                                    nextSong.artist.length > 15 ? '13px' : '14px'}`,
+                        maxWidth: 'calc(100vw - 200px)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
                       }}
@@ -330,11 +328,6 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
         @keyframes iconPulse {
           0%, 100% { transform: scale(1); box-shadow: 0 0 20px ${accentColor}60; }
           50% { transform: scale(1.1); box-shadow: 0 0 30px ${accentColor}80; }
-        }
-
-        @keyframes ripple {
-          0% { transform: scale(1); opacity: 0.6; }
-          100% { transform: scale(1.8); opacity: 0; }
         }
 
         @keyframes textShimmer {
