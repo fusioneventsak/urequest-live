@@ -47,12 +47,17 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         }
       }
 
-      // Fetch set lists with songs
+      // Fetch set lists with songs - only basic columns that exist
       console.log('Fetching set lists with songs...');
       const { data: setListsData, error: setListsError } = await supabase
         .from('set_lists')
         .select(`
-          *,
+          id,
+          name,
+          date,
+          notes,
+          is_active,
+          created_at,
           set_list_songs (
             id,
             position,
@@ -75,11 +80,10 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         const formattedSetLists = setListsData.map(setList => ({
           id: setList.id,
           name: setList.name,
-          description: setList.description || '',
+          date: setList.date,
           isActive: setList.is_active || false,
-          date: new Date(setList.created_at).toISOString(),
-          createdAt: new Date(setList.created_at).toISOString(),
-          updatedAt: new Date(setList.updated_at).toISOString(),
+          notes: setList.notes || '',
+          createdAt: setList.created_at || '',
           songs: (setList.set_list_songs || [])
             .sort((a: any, b: any) => a.position - b.position)
             .map((sls: any) => ({
