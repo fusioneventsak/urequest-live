@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Type, Music } from 'lucide-react';
 import { useUiSettings } from '../hooks/useUiSettings';
 
@@ -22,26 +22,52 @@ export function TickerManager({
 }: TickerManagerProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [localMessage, setLocalMessage] = useState(customMessage);
+  const timeoutRef = useRef<NodeJS.Timeout>();
   const { updateSettings } = useUiSettings();
 
+  // Sync localMessage when customMessage prop changes from external sources
+  useEffect(() => {
+    setLocalMessage(customMessage);
+  }, [customMessage]);
+
+  // Debounced message update function
   const handleMessageUpdate = async (message: string) => {
-    // Update local state immediately for responsive UI
-    onUpdateMessage(message);
-    
     try {
       setIsUpdating(true);
-      // Update database with new message
+      
+      // Update parent component state
+      onUpdateMessage(message);
+      
+      // Update database
       await updateSettings({
         custom_message: message,
-        ticker_active: message.trim() !== '', // Auto-activate if message exists
+        ticker_active: message.trim() !== '' ? isActive : false,
         updated_at: new Date().toISOString()
       });
     } catch (error) {
       console.error('Error updating custom message:', error);
-      // Could add toast notification here
+      // Revert local message on error
+      setLocalMessage(customMessage);
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  // Handle input changes with debouncing
+  const handleInputChange = (newValue: string) => {
+    // Update local state immediately for responsive UI
+    setLocalMessage(newValue);
+    
+    // Clear existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    // Debounce the actual database update
+    timeoutRef.current = setTimeout(() => {
+      handleMessageUpdate(newValue);
+    }, 500); // Wait 500ms after user stops typing
   };
 
   const handleToggleActive = async () => {
@@ -49,38 +75,35 @@ export function TickerManager({
       setIsUpdating(true);
       
       if (isActive) {
-        // STOPPING: Clear the message AND deactivate
-        onUpdateMessage(''); // Clear local state immediately
-        onToggleActive(); // Toggle local active state immediately
+        // STOPPING: Clear everything
+        setLocalMessage('');
+        onUpdateMessage('');
+        onToggleActive();
         
         // Clear in database
         await updateSettings({
-          custom_message: '', // Clear the message
-          ticker_active: false, // Deactivate ticker
+          custom_message: '',
+          ticker_active: false,
           updated_at: new Date().toISOString()
         });
       } else {
         // STARTING: Only activate if there's a message
-        if (customMessage.trim()) {
-          onToggleActive(); // Toggle local active state immediately
+        if (localMessage.trim()) {
+          onToggleActive();
           
           await updateSettings({
-            custom_message: customMessage,
+            custom_message: localMessage,
             ticker_active: true,
             updated_at: new Date().toISOString()
           });
         } else {
-          // No message to activate - could show warning
           console.warn('Cannot activate ticker without a custom message');
         }
       }
     } catch (error) {
       console.error('Error toggling custom message:', error);
-      // Revert local state on error
-      if (isActive) {
-        onToggleActive(); // Revert toggle
-        onUpdateMessage(customMessage); // Restore message
-      }
+      // Revert on error
+      setLocalMessage(customMessage);
     } finally {
       setIsUpdating(false);
     }
@@ -90,7 +113,13 @@ export function TickerManager({
     try {
       setIsUpdating(true);
       
-      // Clear everything immediately for instant feedback
+      // Clear timeout if pending
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      
+      // Clear everything immediately
+      setLocalMessage('');
       onUpdateMessage('');
       if (isActive) {
         onToggleActive();
@@ -104,10 +133,21 @@ export function TickerManager({
       });
     } catch (error) {
       console.error('Error clearing message:', error);
+      // Revert on error
+      setLocalMessage(customMessage);
     } finally {
       setIsUpdating(false);
     }
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -115,20 +155,20 @@ export function TickerManager({
         <h2 className="text-xl font-semibold neon-text">Ticker Management</h2>
         <div className="flex items-center space-x-3">
           {/* Clear Message Button */}
-          {(customMessage.trim() || isActive) && (
+          {(localMessage.trim() || isActive) && (
             <button
               onClick={clearMessage}
               disabled={isUpdating}
               className="neon-button bg-gray-600 hover:bg-gray-700 disabled:opacity-50"
             >
-              Clear Message
+              {isUpdating ? 'Clearing...' : 'Clear Message'}
             </button>
           )}
           
           {/* Start/Stop Button */}
           <button
             onClick={handleToggleActive}
-            disabled={isUpdating || (!isActive && !customMessage.trim())}
+            disabled={isUpdating || (!isActive && !localMessage.trim())}
             className={`neon-button flex items-center disabled:opacity-50 ${
               isActive ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
             }`}
@@ -195,8 +235,8 @@ export function TickerManager({
           </label>
           <div className="space-y-2">
             <textarea
-              value={customMessage}
-              onChange={(e) => handleMessageUpdate(e.target.value)}
+              value={localMessage}
+              onChange={(e) => handleInputChange(e.target.value)}
               placeholder="Enter a custom message to display in the ticker..."
               className="w-full px-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink disabled:opacity-50"
               rows={2}
@@ -204,10 +244,10 @@ export function TickerManager({
             />
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-400">
-                When active, this message will override the next song information
+                {isUpdating ? 'Saving changes...' : 'Changes save automatically after you stop typing'}
               </p>
               <p className="text-xs text-gray-500">
-                {customMessage.length} characters
+                {localMessage.length} characters
               </p>
             </div>
           </div>
@@ -223,14 +263,15 @@ export function TickerManager({
           
           {showPreview && (
             <div className="mt-4 p-4 rounded-lg bg-darker-purple border border-neon-purple/20">
-              <p className="text-white text-sm">
+              <p className="text-white text-sm mb-2">
                 <strong>Ticker will display:</strong>
               </p>
-              <p className="text-white mt-2" style={{
-                fontSize: `${customMessage.length > 60 ? '12px' : '14px'}`,
-                fontStyle: (!isActive || !customMessage) ? 'italic' : 'normal'
+              <p className="text-white" style={{
+                fontSize: `${localMessage.length > 60 ? '12px' : localMessage.length > 30 ? '14px' : '16px'}`,
+                fontStyle: (!isActive || !localMessage) ? 'italic' : 'normal',
+                color: (!isActive || !localMessage) ? '#9ca3af' : 'white'
               }}>
-                {isActive && customMessage ? customMessage : (nextSong
+                {isActive && localMessage ? localMessage : (nextSong
                   ? `🎵 Coming Up Next: ${nextSong.title}${nextSong.artist ? ` by ${nextSong.artist}` : ''} 🎵`
                   : 'No content to display'
                 )}
