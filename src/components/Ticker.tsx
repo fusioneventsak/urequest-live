@@ -157,10 +157,10 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               </div>
 
               {/* Compact Badge + Song Info Stacked */}
-              <div className="flex flex-col justify-center space-y-1 min-w-0">
+              <div className="flex flex-col justify-center space-y-1.5 min-w-0">
                 {/* Smaller Next Up Badge */}
                 <span 
-                  className="text-xs font-semibold tracking-wide px-3 py-1 rounded-full whitespace-nowrap self-start"
+                  className="text-xs font-medium tracking-wide px-2 py-0.5 rounded-md whitespace-nowrap self-start"
                   style={{ 
                     background: `linear-gradient(90deg, ${accentColor}25, ${secondaryColor}25)`,
                     color: 'white',
@@ -171,10 +171,10 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   NEXT UP
                 </span>
                 
-                {/* Song Info Below Badge */}
-                <div className="flex flex-col">
+                {/* Song Info Below Badge - Bigger Title */}
+                <div className="flex flex-col -space-y-0.5">
                   <h3 
-                    className="text-base font-bold tracking-wide whitespace-nowrap text-white leading-tight"
+                    className="text-lg font-bold tracking-wide whitespace-nowrap text-white leading-tight"
                     style={{
                       textShadow: `0 2px 10px ${accentColor}60`
                     }}
