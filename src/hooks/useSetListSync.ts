@@ -60,13 +60,11 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
               id,
               title,
               artist,
-              duration,
               genre,
-              energy_level,
-              tempo,
-              key_signature,
-              time_signature,
-              notes
+              key,
+              notes,
+              last_played,
+              album_art_url
             )
           )
         `)
@@ -81,6 +79,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
           name: setList.name,
           description: setList.description || '',
           isActive: setList.is_active || false,
+          date: new Date(setList.created_at).toISOString(),
           createdAt: new Date(setList.created_at).toISOString(),
           updatedAt: new Date(setList.updated_at).toISOString(),
           songs: (setList.set_list_songs || [])
@@ -88,7 +87,9 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
             .map((sls: any) => ({
               ...sls.songs,
               position: sls.position,
-              setListSongId: sls.id
+              setListSongId: sls.id,
+              lastPlayed: sls.songs.last_played ? new Date(sls.songs.last_played) : undefined,
+              albumArtUrl: sls.songs.album_art_url
             }))
         }));
 
