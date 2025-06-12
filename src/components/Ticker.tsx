@@ -215,30 +215,33 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                 {/* Song Info Below - Centered with Dynamic Scaling */}
                 <div className="flex flex-col items-center -space-y-1">
                   <h3 
-                    className="font-bold tracking-wide text-white leading-tight text-center"
+                    className="font-bold tracking-wide text-white leading-tight text-center whitespace-nowrap"
                     style={{
                       textShadow: `0 2px 10px ${accentColor}60`,
-                      fontSize: `${nextSong.title.length > 30 ? '14px' : 
-                                  nextSong.title.length > 20 ? '16px' : 
-                                  nextSong.title.length > 15 ? '18px' : '20px'}`,
-                      maxWidth: '400px',
-                      wordBreak: 'break-word',
-                      whiteSpace: 'normal',
-                      lineHeight: '1.1'
+                      fontSize: `${nextSong.title.length > 40 ? '12px' : 
+                                  nextSong.title.length > 30 ? '14px' : 
+                                  nextSong.title.length > 25 ? '16px' :
+                                  nextSong.title.length > 20 ? '18px' : 
+                                  nextSong.title.length > 15 ? '20px' : '22px'}`,
+                      maxWidth: 'calc(100vw - 200px)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
                     }}
                   >
                     {nextSong.title}
                   </h3>
                   {nextSong.artist && (
                     <p 
-                      className="text-gray-300 font-medium leading-tight text-center"
+                      className="text-gray-300 font-medium leading-tight text-center whitespace-nowrap"
                       style={{ 
                         textShadow: `0 1px 5px ${secondaryColor}40`,
-                        fontSize: `${nextSong.artist.length > 25 ? '11px' : 
-                                    nextSong.artist.length > 18 ? '12px' : '14px'}`,
-                        maxWidth: '400px',
-                        wordBreak: 'break-word',
-                        whiteSpace: 'normal'
+                        fontSize: `${nextSong.artist.length > 35 ? '10px' : 
+                                    nextSong.artist.length > 25 ? '11px' :
+                                    nextSong.artist.length > 20 ? '12px' :
+                                    nextSong.artist.length > 15 ? '13px' : '14px'}`,
+                        maxWidth: 'calc(100vw - 200px)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                       }}
                     >
                       {nextSong.artist}
