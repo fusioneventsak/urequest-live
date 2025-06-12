@@ -1,16 +1,13 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { cacheService } from '../utils/cache';
-import { RealtimeManager } from '../utils/realtimeManager';
 import { useRealtimeConnection } from './useRealtimeConnection';
 import { useRealtimeSubscription } from './useRealtimeSubscription';
-import { nanoid } from 'nanoid';
 import type { SongRequest } from '../types';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
-const FETCH_DEBOUNCE_TIME = 500; // 500ms
+const FETCH_DEBOUNCE_TIME = 100; // Reduced from 500ms to 100ms
 const FETCH_TIMEOUT = 15000; // 15 seconds
-const REFRESH_INTERVAL = 60000; // 1 minute
 
 export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) => void) {
   const [isLoading, setIsLoading] = useState(true);
@@ -18,7 +15,6 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const mountedRef = useRef(true);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const fetchInProgressRef = useRef<boolean>(false);
@@ -230,19 +226,13 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
     };
   }, [fetchRequests]);
   
-  // Setup periodic refresh and initial fetch
+  // REMOVED: Periodic polling interval setup
+  // Initial fetch only - no more polling timer
   useEffect(() => {
     mountedRef.current = true;
     
-    // Initial fetch
+    // Initial fetch only
     fetchRequests();
-    
-    // Setup periodic refresh
-    refreshIntervalRef.current = setInterval(() => {
-      if (mountedRef.current && isOnline) {
-        fetchRequests(true);
-      }
-    }, REFRESH_INTERVAL);
     
     // Cleanup on unmount
     return () => {
@@ -251,10 +241,6 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
       // Clear any pending timeouts
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
-      }
-      
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
       }
       
       // Abort any in-flight requests
