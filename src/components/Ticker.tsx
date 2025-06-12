@@ -157,24 +157,24 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               </div>
 
               {/* Compact Badge + Song Info Stacked */}
-              <div className="flex flex-col justify-center space-y-1.5 min-w-0">
-                {/* Smaller Next Up Badge */}
+              <div className="flex flex-col justify-center space-y-2 min-w-0">
+                {/* Tiny Next Up Badge */}
                 <span 
-                  className="text-xs font-medium tracking-wide px-2 py-0.5 rounded-md whitespace-nowrap self-start"
+                  className="text-xs font-normal tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap self-start opacity-80"
                   style={{ 
-                    background: `linear-gradient(90deg, ${accentColor}25, ${secondaryColor}25)`,
+                    background: `linear-gradient(90deg, ${accentColor}20, ${secondaryColor}20)`,
                     color: 'white',
-                    border: `1px solid ${accentColor}40`,
-                    backdropFilter: 'blur(10px)'
+                    border: `1px solid ${accentColor}30`,
+                    fontSize: '10px'
                   }}
                 >
                   NEXT UP
                 </span>
                 
-                {/* Song Info Below Badge - Bigger Title */}
-                <div className="flex flex-col -space-y-0.5">
+                {/* Song Info Below Badge - Larger */}
+                <div className="flex flex-col -space-y-1">
                   <h3 
-                    className="text-lg font-bold tracking-wide whitespace-nowrap text-white leading-tight"
+                    className="text-xl font-bold tracking-wide whitespace-nowrap text-white leading-tight"
                     style={{
                       textShadow: `0 2px 10px ${accentColor}60`
                     }}
@@ -183,7 +183,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   </h3>
                   {nextSong.artist && (
                     <p 
-                      className="text-xs text-gray-300 font-medium whitespace-nowrap leading-tight"
+                      className="text-sm text-gray-300 font-medium whitespace-nowrap leading-tight"
                       style={{ textShadow: `0 1px 5px ${secondaryColor}40` }}
                     >
                       {nextSong.artist}
