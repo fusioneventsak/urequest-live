@@ -209,7 +209,7 @@ export function KioskPage({
           style={{ backgroundColor: headerBgColor }}
         >
           {settings?.show_qr_code && (
-            <div className="absolute right-4 top-4 p-2 glass-effect rounded-lg border shadow-lg animate-pulse"
+            <div className="absolute right-4 top-4 p-2 glass-effect rounded-lg border shadow-lg"
               style={{
                 borderColor: accentColor,
                 boxShadow: `0 0 10px ${accentColor}40, 0 4px 15px rgba(0,0,0,0.2)`,
@@ -217,12 +217,6 @@ export function KioskPage({
               }}
             >
               <div className="relative">
-                <div className="absolute inset-0 rounded"
-                  style={{
-                    background: `linear-gradient(45deg, ${accentColor}20, transparent, ${accentColor}20)`,
-                    animation: 'qrGlow 2s ease-in-out infinite'
-                  }}
-                />
                 <QRCode 
                   value={currentUrl} 
                   size={100} 
@@ -230,13 +224,9 @@ export function KioskPage({
                   fgColor="#000000"
                   level="L"
                   includeMargin={false}
-                  style={{
-                    position: 'relative',
-                    zIndex: 1
-                  }}
                 />
               </div>
-              <div className="text-center mt-2 relative z-10">
+              <div className="text-center mt-2">
                 <div className="text-black text-xs font-bold tracking-wide uppercase">
                   Scan to Request
                 </div>
@@ -660,25 +650,4 @@ export function KioskPage({
       </div>
     </ErrorBoundary>
   );
-}
-
-/* Add QR code specific animations */
-const qrStyles = `
-  @keyframes qrGlow {
-    0%, 100% {
-      opacity: 0.3;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 0.6;
-      transform: scale(1.02);
-    }
-  }
-`;
-
-// Inject styles
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = qrStyles;
-  document.head.appendChild(styleSheet);
 }
