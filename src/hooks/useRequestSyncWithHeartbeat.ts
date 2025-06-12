@@ -6,7 +6,7 @@ import { useRealtimeSubscription } from './useRealtimeSubscription';
 import type { SongRequest } from '../types';
 
 const REQUESTS_CACHE_KEY = 'requests:all';
-const FETCH_DEBOUNCE_TIME = 50; // Reduced from 100ms to 50ms
+const FETCH_DEBOUNCE_TIME = 25; // Further reduced to 25ms for faster normal updates
 const FETCH_TIMEOUT = 15000; // 15 seconds
 
 export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) => void) {
@@ -22,20 +22,26 @@ export function useRequestSyncWithHeartbeat(onUpdate: (requests: SongRequest[]) 
   // Use the realtime connection hook
   const { isConnected, reconnect } = useRealtimeConnection();
   
-  // Create a safe callback for realtime updates with priority handling
+  // Create a safe callback for realtime updates with INSTANT lock handling
   const handleRealtimeUpdate = useCallback((payload: any) => {
     console.log('Realtime update received:', payload.eventType, payload.table);
     
-    // For lock/unlock updates, bypass debouncing for instant response
-    const isLockUpdate = payload.new?.is_locked !== payload.old?.is_locked;
-    const isStatusUpdate = payload.new?.status !== payload.old?.status;
-    const isUrgentUpdate = isLockUpdate || isStatusUpdate;
+    // Check if this is a lock/unlock or status change - these need INSTANT updates
+    const oldData = payload.old || {};
+    const newData = payload.new || {};
     
-    if (isUrgentUpdate) {
-      console.log('🚨 Urgent update detected - bypassing debounce');
-      fetchRequests(true, true); // true for bypassCache, true for bypassDebounce
+    const isLockChange = oldData.is_locked !== newData.is_locked;
+    const isStatusChange = oldData.status !== newData.status;
+    const isPlayedChange = oldData.is_played !== newData.is_played;
+    
+    if (isLockChange || isStatusChange || isPlayedChange) {
+      console.log('🚨 INSTANT UPDATE: Lock/Status/Played change detected');
+      // For critical updates: NO debouncing, NO cache check, IMMEDIATE fetch
+      fetchRequests(true, true); 
     } else {
-      fetchRequests(true); // Normal debounced update
+      console.log('📥 Regular update - using normal flow');
+      // For other updates: use normal debounced flow
+      fetchRequests(true);
     }
   }, []);
   
