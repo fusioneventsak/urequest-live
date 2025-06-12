@@ -209,18 +209,65 @@ export function KioskPage({
           style={{ backgroundColor: headerBgColor }}
         >
           {settings?.show_qr_code && (
-            <div className="absolute right-4 top-4 p-2 bg-white rounded-lg shadow-md">
-              <QRCode 
-                value={currentUrl} 
-                size={100} 
-                bgColor="#ffffff"
-                fgColor="#000000"
-                level="L"
-                includeMargin={false}
-              />
-              <div className="text-black text-xs mt-1 text-center font-medium">
-                Scan to Request
+            <div className="absolute right-4 top-4 p-3 glass-effect rounded-xl border-2 shadow-2xl animate-pulse"
+              style={{
+                borderColor: accentColor,
+                boxShadow: `0 0 20px ${accentColor}50, 0 10px 25px rgba(0,0,0,0.3)`,
+                background: `linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.85))`
+              }}
+            >
+              <div className="relative">
+                <div className="absolute inset-0 rounded-lg"
+                  style={{
+                    background: `linear-gradient(45deg, ${accentColor}20, transparent, ${accentColor}20)`,
+                    animation: 'qrGlow 3s ease-in-out infinite'
+                  }}
+                />
+                <QRCode 
+                  value={currentUrl} 
+                  size={120} 
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                  level="L"
+                  includeMargin={false}
+                  style={{
+                    position: 'relative',
+                    zIndex: 1
+                  }}
+                />
               </div>
+              <div className="text-center mt-2 relative z-10">
+                <div className="text-black text-xs font-bold tracking-wide uppercase">
+                  Scan to Request
+                </div>
+                <div className="flex items-center justify-center mt-1">
+                  <div className="w-2 h-2 rounded-full mr-1"
+                    style={{ 
+                      backgroundColor: accentColor,
+                      boxShadow: `0 0 8px ${accentColor}`
+                    }}
+                  />
+                  <div className="text-xs font-medium"
+                    style={{ color: accentColor }}
+                  >
+                    LIVE
+                  </div>
+                </div>
+              </div>
+              
+              {/* Corner decorations */}
+              <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 rounded-tl-lg"
+                style={{ borderColor: accentColor }}
+              />
+              <div className="absolute top-1 right-1 w-3 h-3 border-r-2 border-t-2 rounded-tr-lg"
+                style={{ borderColor: accentColor }}
+              />
+              <div className="absolute bottom-1 left-1 w-3 h-3 border-l-2 border-b-2 rounded-bl-lg"
+                style={{ borderColor: accentColor }}
+              />
+              <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 rounded-br-lg"
+                style={{ borderColor: accentColor }}
+              />
             </div>
           )}
           
@@ -613,4 +660,25 @@ export function KioskPage({
       </div>
     </ErrorBoundary>
   );
+}
+
+/* Add QR code specific animations */
+const qrStyles = `
+  @keyframes qrGlow {
+    0%, 100% {
+      opacity: 0.3;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.6;
+      transform: scale(1.02);
+    }
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = qrStyles;
+  document.head.appendChild(styleSheet);
 }
