@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Music4, ThumbsUp, UserCircle } from 'lucide-react';
 import { useUiSettings } from '../hooks/useUiSettings';
 import { supabase } from '../utils/supabase';
@@ -17,6 +17,7 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
   const accentColor = settings?.frontend_accent_color || '#ff00ff';
   const secondaryColor = settings?.frontend_secondary_accent || '#9d00ff';
   const containerRef = useRef<HTMLDivElement>(null);
+  const requestRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [scrollProgress, setScrollProgress] = useState(0);
   const [votedRequests, setVotedRequests] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -26,6 +27,41 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
   useEffect(() => {
     console.log('🔄 UpvoteList requests updated:', requests.length, requests.map(r => r.id));
   }, [requests]);
+
+  // Intersection observer for scroll animation
+  useEffect(() => {
+    const options = {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.1
+    };
+
+    const handleIntersect = (entries: IntersectionObserverEntry[]) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(handleIntersect, options);
+    
+    // Observe all request elements
+    requestRefs.current.forEach(ref => {
+      if (ref) observer.observe(ref);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeRequests.length]);
+
+  // Ref callback for request elements
+  const setRequestRef = useCallback((element: HTMLDivElement | null, id: string) => {
+    if (element) {
+      requestRefs.current.set(id, element);
+    }
+  }, []);
 
   // Clear optimistic votes when real data arrives
   useEffect(() => {
@@ -220,7 +256,8 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
         return (
           <div
             key={request.id}
-            className="glass-effect rounded-lg p-4 relative overflow-hidden transition-all duration-300 h-[88px] flex items-center"
+            ref={(el) => setRequestRef(el as HTMLDivElement, request.id)}
+            className="glass-effect animate-on-scroll rounded-lg p-4 relative overflow-hidden transition-all duration-300 h-[88px] flex items-center"
             style={{
               borderColor: songBorderColor,
               borderWidth: '2px',
@@ -232,26 +269,6 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
               )`,
             }}
           >
-            <div 
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: `
-                  linear-gradient(
-                    135deg,
-                    transparent 0%,
-                    rgba(255, 255, 255, 0.02) 15%,
-                    rgba(255, 255, 255, 0.05) 30%,
-                    rgba(255, 255, 255, 0.08) 45%,
-                    rgba(255, 255, 255, 0.05) 60%,
-                    rgba(255, 255, 255, 0.02) 75%,
-                    transparent 100%
-                  )
-                `,
-                transform: `translateX(${-50 + scrollProgress}%)`,
-                transition: 'transform 1s ease-out',
-                opacity: 0.4,
-              }}
-            />
 
             <div className="relative flex items-center gap-4 w-full">
               <div 
