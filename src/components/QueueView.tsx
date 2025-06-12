@@ -288,22 +288,19 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
   return (
     <div className="space-y-4">
       {/* Clear Queue Button at the top */}
-      {onResetQueue && (
-        <div className="flex justify-end">
+      <div className="flex justify-between items-center mb-2">
+        {onResetQueue && (
           <button
-            onClick={handleResetQueue}
-            disabled={isResetting}
-            className={`px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors ${
-              isResetting ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {isResetting ? 'Clearing...' : 'Clear Queue'}
-          </button>
-        </div>
-      )}
-      
-      <div className="flex justify-end mb-2">
-        <div className="text-sm text-gray-400">
+             onClick={handleResetQueue}
+             disabled={isResetting}
+             className={`px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors ${
+               isResetting ? 'opacity-50 cursor-not-allowed' : ''
+             }`}
+           >
+             {isResetting ? 'Clearing...' : 'Clear Queue'}
+           </button>
+        )}
+        <div className="text-sm text-gray-400 ml-auto">
           Priority = Requesters + Upvotes
         </div>
       </div>
