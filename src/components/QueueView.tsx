@@ -341,11 +341,11 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
               <div className="flex flex-col">
                 <div className="flex justify-between items-start">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-white truncate">
+                    <h3 className="text-base md:text-lg font-semibold text-white truncate">
                       {decodeTitle(request.title)}
                     </h3>
                     {request.artist && (
-                      <p className="text-gray-300 text-xs truncate">{request.artist}</p>
+                      <p className="text-gray-300 text-sm truncate">{request.artist}</p>
                     )}
                     <div className="flex items-center space-x-2 mt-0.5">
                       <div className="flex items-center space-x-1 text-xs text-gray-400">
