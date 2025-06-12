@@ -26,37 +26,78 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
     <div 
       className="h-20 overflow-hidden w-full border-b border-neon-purple/20 relative flex items-center justify-center"
       style={{
-        background: `linear-gradient(135deg, ${accentColor}25, ${secondaryColor}25, ${accentColor}15)`,
+        background: `linear-gradient(135deg, 
+          rgba(0, 0, 0, 0.85) 0%, 
+          rgba(20, 20, 30, 0.9) 25%,
+          rgba(15, 15, 25, 0.95) 50%,
+          rgba(20, 20, 30, 0.9) 75%,
+          rgba(0, 0, 0, 0.85) 100%
+        )`,
+        backdropFilter: 'blur(20px) saturate(150%)',
+        borderTop: `1px solid rgba(255, 255, 255, 0.1)`,
+        borderBottom: `1px solid ${accentColor}40`,
+        boxShadow: `
+          inset 0 1px 0 rgba(255, 255, 255, 0.1),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+          0 4px 20px rgba(0, 0, 0, 0.3)
+        `
       }}
     >
-      {/* Animated background pattern */}
+      {/* Enhanced animated background pattern */}
       <div 
-        className="absolute inset-0 opacity-20"
+        className="absolute inset-0 opacity-30"
         style={{
           background: `
-            radial-gradient(circle at 20% 50%, ${accentColor}30 0%, transparent 50%),
-            radial-gradient(circle at 80% 50%, ${secondaryColor}30 0%, transparent 50%),
-            linear-gradient(90deg, transparent 0%, ${accentColor}10 50%, transparent 100%)
+            radial-gradient(ellipse at 25% 50%, ${accentColor}15 0%, transparent 60%),
+            radial-gradient(ellipse at 75% 50%, ${secondaryColor}15 0%, transparent 60%),
+            linear-gradient(90deg, 
+              transparent 0%, 
+              ${accentColor}08 25%, 
+              ${secondaryColor}08 50%, 
+              ${accentColor}08 75%, 
+              transparent 100%
+            )
           `,
-          animation: 'tickerFlow 8s ease-in-out infinite'
+          animation: 'ambientFlow 12s ease-in-out infinite'
         }}
       />
       
-      {/* Reflective sweep animation */}
+      {/* Realistic glass reflection */}
+      <div 
+        className="absolute inset-0 pointer-events-none overflow-hidden"
+        style={{
+          background: `linear-gradient(
+            125deg,
+            transparent 0%,
+            transparent 30%,
+            rgba(255, 255, 255, 0.02) 40%,
+            rgba(255, 255, 255, 0.08) 45%,
+            rgba(255, 255, 255, 0.15) 50%,
+            rgba(255, 255, 255, 0.08) 55%,
+            rgba(255, 255, 255, 0.02) 60%,
+            transparent 70%,
+            transparent 100%
+          )`,
+          animation: 'glassReflection 8s ease-in-out infinite',
+          transform: 'skewX(-20deg)'
+        }}
+      />
+
+      {/* Secondary subtle reflection */}
       <div 
         className="absolute inset-0 pointer-events-none"
         style={{
           background: `linear-gradient(
-            110deg,
+            80deg,
             transparent 0%,
-            transparent 40%,
-            rgba(255, 255, 255, 0.1) 50%,
-            rgba(255, 255, 255, 0.2) 55%,
-            rgba(255, 255, 255, 0.1) 60%,
-            transparent 70%,
+            transparent 60%,
+            rgba(255, 255, 255, 0.03) 70%,
+            rgba(255, 255, 255, 0.06) 75%,
+            rgba(255, 255, 255, 0.03) 80%,
+            transparent 90%,
             transparent 100%
           )`,
-          animation: 'reflectiveSweep 4s ease-in-out infinite'
+          animation: 'secondaryReflection 6s ease-in-out infinite reverse'
         }}
       />
 
@@ -211,14 +252,47 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
       </div>
 
       <style jsx>{`
-        @keyframes tickerFlow {
-          0%, 100% { transform: translateX(-10px) scale(1); opacity: 0.8; }
-          50% { transform: translateX(10px) scale(1.05); opacity: 1; }
+        @keyframes ambientFlow {
+          0%, 100% { 
+            transform: translateX(-5px) scale(1); 
+            opacity: 0.3; 
+          }
+          33% { 
+            transform: translateX(5px) scale(1.02); 
+            opacity: 0.4; 
+          }
+          66% { 
+            transform: translateX(-3px) scale(0.98); 
+            opacity: 0.35; 
+          }
         }
 
-        @keyframes reflectiveSweep {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
+        @keyframes glassReflection {
+          0% { 
+            transform: translateX(-150%) skewX(-20deg); 
+            opacity: 0;
+          }
+          10% { 
+            opacity: 1;
+          }
+          90% { 
+            opacity: 1;
+          }
+          100% { 
+            transform: translateX(250%) skewX(-20deg); 
+            opacity: 0;
+          }
+        }
+
+        @keyframes secondaryReflection {
+          0%, 100% { 
+            transform: translateX(-100%); 
+            opacity: 0;
+          }
+          50% { 
+            transform: translateX(200%); 
+            opacity: 0.6;
+          }
         }
 
         @keyframes iconPulse {
