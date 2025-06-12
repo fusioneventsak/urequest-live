@@ -382,11 +382,14 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
                     </button>
                     <button
                       onClick={() => onMarkPlayed(request.id)}
-                      className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors flex items-center"
+                      className="p-2 rounded-lg transition-all duration-200 flex items-center bg-red-500 text-white hover:bg-red-600 shadow-lg"
+                      style={{
+                        boxShadow: '0 0 15px rgba(239, 68, 68, 0.5)',
+                      }}
                       title="Mark as Played"
                     >
-                      <CheckCircle2 className="w-4 h-4 mr-1" />
-                      <span className="text-xs font-medium">PLAYED</span>
+                      <CheckCircle2 className="w-5 h-5 mr-1" />
+                      <span className="text-xs font-medium tracking-wide">PLAYED</span>
                     </button>
                   </div>
                 </div>
