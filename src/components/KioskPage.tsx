@@ -127,7 +127,6 @@ export function KioskPage({
 
       const success = await onSubmitRequest(requestData);
       if (success) {
-        toast.success('Your request has been added to the queue!');
         setRequestMessage(''); // Clear the message field after successful submission
         setRequestName(''); // Clear the name field after successful submission
         setSelectedSong(null);
