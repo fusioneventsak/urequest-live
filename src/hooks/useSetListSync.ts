@@ -62,9 +62,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
               artist,
               genre,
               key,
-              notes,
-              last_played,
-              album_art_url
+              notes
             )
           )
         `)
@@ -87,9 +85,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
             .map((sls: any) => ({
               ...sls.songs,
               position: sls.position,
-              setListSongId: sls.id,
-              lastPlayed: sls.songs.last_played ? new Date(sls.songs.last_played) : undefined,
-              albumArtUrl: sls.songs.album_art_url
+              setListSongId: sls.id
             }))
         }));
 
