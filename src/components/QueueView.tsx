@@ -30,6 +30,20 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
   // Track if component is mounted
   const mountedRef = useRef(true);
   
+  // Handle queue reset with confirmation
+  const handleResetQueue = async () => {
+    if (!onResetQueue) return;
+    
+    if (window.confirm('Are you sure you want to clear all pending requests and votes? This will also reset any rate limits.')) {
+      setIsResetting(true);
+      try {
+        await onResetQueue();
+      } finally {
+        setIsResetting(false);
+      }
+    }
+  };
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -271,39 +285,27 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
     });
   };
 
-  // Handle queue reset with confirmation
-  const handleResetQueue = async () => {
-    if (!onResetQueue) return;
-    
-    if (window.confirm('Are you sure you want to clear all pending requests and votes? This will also reset any rate limits.')) {
-      setIsResetting(true);
-      try {
-        await onResetQueue();
-      } finally {
-        setIsResetting(false);
-      }
-    }
-  };
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      {/* Clear Queue Button at the top */}
+      {onResetQueue && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleResetQueue}
+            disabled={isResetting}
+            className={`px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors ${
+              isResetting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isResetting ? 'Clearing...' : 'Clear Queue'}
+          </button>
+        </div>
+      )}
+      
+      <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-semibold neon-text">Request Queue</h2>
-        <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-400">
-            Priority = Requesters + Upvotes
-          </div>
-          {onResetQueue && (
-            <button
-              onClick={handleResetQueue}
-              disabled={isResetting}
-              className={`px-4 py-2 text-sm text-red-400 hover:bg-red-400/20 rounded-md transition-colors ${
-                isResetting ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {isResetting ? 'Clearing...' : 'Clear Queue'}
-            </button>
-          )}
+        <div className="text-sm text-gray-400">
+          Priority = Requesters + Upvotes
         </div>
       </div>
 
