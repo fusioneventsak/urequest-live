@@ -209,23 +209,23 @@ export function KioskPage({
           style={{ backgroundColor: headerBgColor }}
         >
           {settings?.show_qr_code && (
-            <div className="absolute right-4 top-4 p-3 glass-effect rounded-xl border-2 shadow-2xl animate-pulse"
+            <div className="absolute right-4 top-4 p-2 glass-effect rounded-lg border shadow-lg animate-pulse"
               style={{
                 borderColor: accentColor,
-                boxShadow: `0 0 20px ${accentColor}50, 0 10px 25px rgba(0,0,0,0.3)`,
-                background: `linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.85))`
+                boxShadow: `0 0 10px ${accentColor}40, 0 4px 15px rgba(0,0,0,0.2)`,
+                background: `linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.9))`
               }}
             >
               <div className="relative">
-                <div className="absolute inset-0 rounded-lg"
+                <div className="absolute inset-0 rounded"
                   style={{
                     background: `linear-gradient(45deg, ${accentColor}20, transparent, ${accentColor}20)`,
-                    animation: 'qrGlow 3s ease-in-out infinite'
+                    animation: 'qrGlow 2s ease-in-out infinite'
                   }}
                 />
                 <QRCode 
                   value={currentUrl} 
-                  size={120} 
+                  size={100} 
                   bgColor="#ffffff"
                   fgColor="#000000"
                   level="L"
@@ -241,10 +241,10 @@ export function KioskPage({
                   Scan to Request
                 </div>
                 <div className="flex items-center justify-center mt-1">
-                  <div className="w-2 h-2 rounded-full mr-1"
+                  <div className="w-1.5 h-1.5 rounded-full mr-1"
                     style={{ 
                       backgroundColor: accentColor,
-                      boxShadow: `0 0 8px ${accentColor}`
+                      boxShadow: `0 0 6px ${accentColor}`
                     }}
                   />
                   <div className="text-xs font-medium"
@@ -256,16 +256,16 @@ export function KioskPage({
               </div>
               
               {/* Corner decorations */}
-              <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 rounded-tl-lg"
+              <div className="absolute top-0.5 left-0.5 w-2 h-2 border-l border-t rounded-tl"
                 style={{ borderColor: accentColor }}
               />
-              <div className="absolute top-1 right-1 w-3 h-3 border-r-2 border-t-2 rounded-tr-lg"
+              <div className="absolute top-0.5 right-0.5 w-2 h-2 border-r border-t rounded-tr"
                 style={{ borderColor: accentColor }}
               />
-              <div className="absolute bottom-1 left-1 w-3 h-3 border-l-2 border-b-2 rounded-bl-lg"
+              <div className="absolute bottom-0.5 left-0.5 w-2 h-2 border-l border-b rounded-bl"
                 style={{ borderColor: accentColor }}
               />
-              <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 rounded-br-lg"
+              <div className="absolute bottom-0.5 right-0.5 w-2 h-2 border-r border-b rounded-br"
                 style={{ borderColor: accentColor }}
               />
             </div>
