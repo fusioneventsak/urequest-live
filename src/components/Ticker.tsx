@@ -156,11 +156,31 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                 )}
               </div>
 
-              {/* Compact Badge + Song Info Stacked */}
-              <div className="flex flex-col justify-center space-y-2 min-w-0">
-                {/* Tiny Next Up Badge */}
+              {/* Compact Badge + Song Info Stacked - Centered */}
+              <div className="flex flex-col justify-center items-center space-y-2 min-w-0">
+                {/* Song Info Above - Centered */}
+                <div className="flex flex-col items-center -space-y-1">
+                  <h3 
+                    className="text-xl font-bold tracking-wide whitespace-nowrap text-white leading-tight text-center"
+                    style={{
+                      textShadow: `0 2px 10px ${accentColor}60`
+                    }}
+                  >
+                    {nextSong.title}
+                  </h3>
+                  {nextSong.artist && (
+                    <p 
+                      className="text-sm text-gray-300 font-medium whitespace-nowrap leading-tight text-center"
+                      style={{ textShadow: `0 1px 5px ${secondaryColor}40` }}
+                    >
+                      {nextSong.artist}
+                    </p>
+                  )}
+                </div>
+
+                {/* Tiny Next Up Badge Below - Centered */}
                 <span 
-                  className="text-xs font-normal tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap self-start opacity-80"
+                  className="text-xs font-normal tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap opacity-80"
                   style={{ 
                     background: `linear-gradient(90deg, ${accentColor}20, ${secondaryColor}20)`,
                     color: 'white',
@@ -170,26 +190,6 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                 >
                   NEXT UP
                 </span>
-                
-                {/* Song Info Below Badge - Larger */}
-                <div className="flex flex-col -space-y-1">
-                  <h3 
-                    className="text-xl font-bold tracking-wide whitespace-nowrap text-white leading-tight"
-                    style={{
-                      textShadow: `0 2px 10px ${accentColor}60`
-                    }}
-                  >
-                    {nextSong.title}
-                  </h3>
-                  {nextSong.artist && (
-                    <p 
-                      className="text-sm text-gray-300 font-medium whitespace-nowrap leading-tight"
-                      style={{ textShadow: `0 1px 5px ${secondaryColor}40` }}
-                    >
-                      {nextSong.artist}
-                    </p>
-                  )}
-                </div>
               </div>
             </div>
 
