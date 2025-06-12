@@ -24,7 +24,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
 
   return (
     <div 
-      className="h-16 sm:h-20 overflow-hidden w-full border-b border-neon-purple/20 relative flex items-center justify-center"
+      className="h-20 overflow-hidden w-full border-b border-neon-purple/20 relative flex items-center justify-center"
       style={{
         background: `linear-gradient(135deg, 
           rgba(0, 0, 0, 0.85) 0%, 
@@ -101,20 +101,20 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
         }}
       />
 
-      {/* Centered Content Container */}
-      <div className="max-w-7xl w-full px-4 sm:px-8 relative z-10">
+      {/* Centered Content Container - extra wide for horizontal layout */}
+      <div className="max-w-8xl w-full px-12 relative z-10">
         {customMessage ? (
-          <div className="flex items-center justify-center space-x-3 sm:space-x-4">
+          <div className="flex items-center justify-center space-x-4">
             {/* Pulsing icon */}
             <div 
-              className="w-8 h-8 sm:w-12 sm:h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
+              className="w-12 h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${accentColor}, ${secondaryColor})`,
                 boxShadow: `0 0 20px ${accentColor}60`,
                 animation: 'iconPulse 2s ease-in-out infinite'
               }}
             >
-              <Volume2 className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
+              <Volume2 className="w-6 h-6 text-white" />
               
               {/* Ripple effect */}
               <div 
@@ -127,7 +127,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
             </div>
             
             <div 
-              className="text-center text-lg sm:text-2xl font-bold"
+              className="text-center text-2xl font-bold"
               style={{
                 background: `linear-gradient(90deg, ${accentColor}, white, ${secondaryColor})`,
                 WebkitBackgroundClip: 'text',
@@ -142,7 +142,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
 
             {/* Audio visualizer bars */}
             <div className="flex items-center space-x-1 flex-shrink-0">
-              {[...Array(4)].map((_, i) => (
+              {[...Array(6)].map((_, i) => (
                 <div
                   key={i}
                   className="sound-wave"
@@ -155,10 +155,10 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
             </div>
           </div>
         ) : nextSong && (
-          <div className="flex items-center justify-center space-x-4 sm:space-x-8">
-            {/* Audio visualizer - left side (hidden on mobile) */}
-            <div className="hidden sm:flex items-center space-x-1 flex-shrink-0">
-              {[...Array(3)].map((_, i) => (
+            <div className="flex items-center justify-center space-x-12">
+            {/* Audio visualizer - left side */}
+            <div className="flex items-center space-x-1 flex-shrink-0">
+              {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
                   className="sound-wave-left"
@@ -170,15 +170,15 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               ))}
             </div>
 
-            {/* Center content: Clean layout optimized for mobile */}
-            <div className="flex items-center space-x-3 sm:space-x-6 min-w-0 flex-1 justify-center">
-              {/* Album Art */}
+            {/* Center content: Clean vertical layout for mobile */}
+            <div className="flex items-center space-x-6">
+              {/* Bigger Album Art with Accent Border */}
               <div className="flex-shrink-0">
                 {nextSong.albumArtUrl ? (
                   <img
                     src={nextSong.albumArtUrl}
                     alt="Album art"
-                    className="w-10 h-10 sm:w-16 sm:h-16 rounded-lg object-cover"
+                    className="w-16 h-16 rounded-lg object-cover"
                     style={{ 
                       boxShadow: `0 4px 20px ${accentColor}40`,
                       border: `2px solid ${accentColor}`
@@ -186,52 +186,62 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   />
                 ) : (
                   <div 
-                    className="w-10 h-10 sm:w-16 sm:h-16 rounded-lg flex items-center justify-center"
+                    className="w-16 h-16 rounded-lg flex items-center justify-center"
                     style={{ 
                       background: `linear-gradient(135deg, ${accentColor}20, ${secondaryColor}20)`,
                       border: `2px solid ${accentColor}`
                     }}
                   >
-                    <Music className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: accentColor }} />
+                    <Music className="w-7 h-7" style={{ color: accentColor }} />
                   </div>
                 )}
               </div>
 
-              {/* Song Info - Responsive sizing */}
-              <div className="flex flex-col justify-center items-center space-y-1 min-w-0 flex-1">
-                {/* Next Up Badge - Always visible, smaller on mobile */}
+              {/* Compact Badge + Song Info Stacked - Mobile Optimized */}
+              <div className="flex flex-col justify-center items-center space-y-1.5 min-w-0">
+                {/* Tiny Next Up Badge Above - Mobile Safe */}
                 <span 
-                  className="text-xs font-normal tracking-wide px-2 py-0.5 rounded whitespace-nowrap opacity-90"
+                  className="text-xs font-normal tracking-wide px-1.5 py-0.5 rounded whitespace-nowrap opacity-80 flex-shrink-0"
                   style={{ 
-                    background: `linear-gradient(90deg, ${accentColor}25, ${secondaryColor}25)`,
+                    background: `linear-gradient(90deg, ${accentColor}20, ${secondaryColor}20)`,
                     color: 'white',
-                    border: `1px solid ${accentColor}40`,
-                    fontSize: '10px',
-                    lineHeight: '1.2'
+                    border: `1px solid ${accentColor}30`,
+                    fontSize: '9px'
                   }}
                 >
                   NEXT UP
                 </span>
 
-                {/* Song Info - Responsive text sizing */}
-                <div className="flex flex-col items-center space-y-0 min-w-0 w-full">
+                {/* Song Info Below - Mobile Responsive */}
+                <div className="flex flex-col items-center -space-y-1">
                   <h3 
-                    className="font-bold tracking-wide text-white leading-tight text-center truncate w-full"
+                    className="font-bold tracking-wide text-white leading-tight text-center whitespace-nowrap"
                     style={{
                       textShadow: `0 2px 10px ${accentColor}60`,
-                      fontSize: 'clamp(12px, 4vw, 18px)', // Responsive font size
-                      maxWidth: '100%'
+                      fontSize: `${nextSong.title.length > 40 ? '10px' : 
+                                  nextSong.title.length > 30 ? '12px' : 
+                                  nextSong.title.length > 25 ? '14px' :
+                                  nextSong.title.length > 20 ? '15px' : 
+                                  nextSong.title.length > 15 ? '16px' : '18px'}`,
+                      maxWidth: 'calc(100vw - 250px)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
                     }}
                   >
                     {nextSong.title}
                   </h3>
                   {nextSong.artist && (
                     <p 
-                      className="text-gray-300 font-medium leading-tight text-center truncate w-full"
+                      className="text-gray-300 font-medium leading-tight text-center whitespace-nowrap"
                       style={{ 
                         textShadow: `0 1px 5px ${secondaryColor}40`,
-                        fontSize: 'clamp(10px, 3vw, 14px)', // Responsive font size
-                        maxWidth: '100%'
+                        fontSize: `${nextSong.artist.length > 35 ? '8px' : 
+                                    nextSong.artist.length > 25 ? '9px' :
+                                    nextSong.artist.length > 20 ? '10px' :
+                                    nextSong.artist.length > 15 ? '11px' : '12px'}`,
+                        maxWidth: 'calc(100vw - 250px)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                       }}
                     >
                       {nextSong.artist}
@@ -241,9 +251,9 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               </div>
             </div>
 
-            {/* Audio visualizer - right side (hidden on mobile) */}
-            <div className="hidden sm:flex items-center space-x-1 flex-shrink-0">
-              {[...Array(3)].map((_, i) => (
+            {/* Audio visualizer - right side */}
+            <div className="flex items-center space-x-1 flex-shrink-0">
+              {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
                   className="sound-wave-right"
@@ -312,49 +322,22 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
           50% { background-position: 100% 50%; }
         }
 
-        @keyframes ripple {
-          0% { 
-            transform: scale(1); 
-            opacity: 0.6; 
-          }
-          100% { 
-            transform: scale(2); 
-            opacity: 0; 
-          }
-        }
-
         .sound-wave, .sound-wave-left, .sound-wave-right {
-          width: 2px;
-          height: 12px;
-          border-radius: 1px;
+          width: 3px;
+          height: 20px;
+          border-radius: 2px;
           animation: soundWave 1.8s ease-in-out infinite;
         }
 
-        @media (min-width: 640px) {
-          .sound-wave, .sound-wave-left, .sound-wave-right {
-            width: 3px;
-            height: 20px;
-            border-radius: 2px;
-          }
-        }
+        .sound-wave-left:nth-child(1) { animation-delay: 0s; height: 16px; }
+        .sound-wave-left:nth-child(2) { animation-delay: 0.15s; height: 22px; }
+        .sound-wave-left:nth-child(3) { animation-delay: 0.3s; height: 18px; }
+        .sound-wave-left:nth-child(4) { animation-delay: 0.45s; height: 24px; }
 
-        .sound-wave-left:nth-child(1) { animation-delay: 0s; height: 10px; }
-        .sound-wave-left:nth-child(2) { animation-delay: 0.15s; height: 16px; }
-        .sound-wave-left:nth-child(3) { animation-delay: 0.3s; height: 12px; }
-
-        .sound-wave-right:nth-child(1) { animation-delay: 0.3s; height: 12px; }
-        .sound-wave-right:nth-child(2) { animation-delay: 0.15s; height: 16px; }
-        .sound-wave-right:nth-child(3) { animation-delay: 0s; height: 10px; }
-
-        @media (min-width: 640px) {
-          .sound-wave-left:nth-child(1) { height: 16px; }
-          .sound-wave-left:nth-child(2) { height: 22px; }
-          .sound-wave-left:nth-child(3) { height: 18px; }
-
-          .sound-wave-right:nth-child(1) { height: 18px; }
-          .sound-wave-right:nth-child(2) { height: 22px; }
-          .sound-wave-right:nth-child(3) { height: 16px; }
-        }
+        .sound-wave-right:nth-child(1) { animation-delay: 0.45s; height: 24px; }
+        .sound-wave-right:nth-child(2) { animation-delay: 0.3s; height: 18px; }
+        .sound-wave-right:nth-child(3) { animation-delay: 0.15s; height: 22px; }
+        .sound-wave-right:nth-child(4) { animation-delay: 0s; height: 16px; }
 
         @keyframes soundWave {
           0%, 100% { 
