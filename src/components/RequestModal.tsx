@@ -155,19 +155,21 @@ export function RequestModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center space-x-3 p-3 rounded-lg bg-neon-purple/10 border border-neon-purple/20">
+          <div className="flex items-center space-x-2 py-2 px-3 rounded-lg bg-neon-purple/10 border border-neon-purple/20">
             <img 
               src={currentUser.photo} 
               alt={currentUser.name}
-              className="w-10 h-10 rounded-full object-cover border-2 border-neon-purple/50"
+              className="w-8 h-8 rounded-full object-cover border border-neon-purple/50"
               onError={(e) => {
                 // Fallback to default avatar on error
                 e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
               }}
             />
             <div className="flex-1">
-              <p className="text-white font-medium">{currentUser.name}</p>
-              <p className="text-gray-400 text-sm">Requesting as</p>
+              <p className="text-white text-sm font-medium flex items-center">
+                <span className="text-gray-400 text-xs mr-2">Requesting as</span>
+                {currentUser.name}
+              </p>
             </div>
           </div>
 
