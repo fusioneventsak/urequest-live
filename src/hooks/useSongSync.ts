@@ -126,12 +126,8 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
     fetchSongs();
     setupSubscription();
     
-    // Setup periodic refresh
-    const refreshInterval = setInterval(() => {
-      if (mountedRef.current) {
-        fetchSongs(true);
-      }
-    }, 300000); // Refresh every 5 minutes
+    // REMOVED: Periodic polling interval setup
+    // No more setInterval for polling every 5 minutes
     
     // Cleanup on unmount
     return () => {
@@ -141,9 +137,6 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
       }
-      
-      // Clear refresh interval
-      clearInterval(refreshInterval);
       
       // Remove subscription
       if (subscriptionRef.current) {
