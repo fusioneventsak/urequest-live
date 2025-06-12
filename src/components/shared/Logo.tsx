@@ -34,7 +34,7 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
         alt="Logo" 
         className="frontend-logo"
         style={{
-         maxHeight: "100%", 
+         maxHeight: "150%", // Increased from 100% to make logo larger
           width: "auto",
           height: "auto",
           display: "block",
