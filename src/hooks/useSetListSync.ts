@@ -4,7 +4,7 @@ import { cacheService } from '../utils/cache';
 import { RealtimeManager } from '../utils/realtimeManager';
 import type { SetList } from '../types';
 
-const SET_LISTS_CACHE_KEY = 'setLists:all';
+const SET_LISTS_CACHE_KEY = 'set_lists:all';
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 1000; // 1 second base delay
 
@@ -54,8 +54,20 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         .select(`
           *,
           set_list_songs (
+            id,
             position,
-            song:songs(*)
+            songs (
+              id,
+              title,
+              artist,
+              duration,
+              genre,
+              energy_level,
+              tempo,
+              key_signature,
+              time_signature,
+              notes
+            )
           )
         `)
         .order('created_at', { ascending: false });
@@ -63,18 +75,21 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
       if (setListsError) throw setListsError;
 
       if (setListsData && mountedRef.current) {
+        // Format the data to match our SetList type
         const formattedSetLists = setListsData.map(setList => ({
           id: setList.id,
-          name: setList.name || 'Unnamed Set List',
-          date: new Date(setList.date),
-          notes: setList.notes || '',
+          name: setList.name,
+          description: setList.description || '',
           isActive: setList.is_active || false,
-          songs: setList.set_list_songs
-            ? setList.set_list_songs
-              .sort((a: any, b: any) => a.position - b.position)
-              .map((item: any) => item.song)
-              .filter(Boolean)
-            : []
+          createdAt: new Date(setList.created_at).toISOString(),
+          updatedAt: new Date(setList.updated_at).toISOString(),
+          songs: (setList.set_list_songs || [])
+            .sort((a: any, b: any) => a.position - b.position)
+            .map((sls: any) => ({
+              ...sls.songs,
+              position: sls.position,
+              setListSongId: sls.id
+            }))
         }));
 
         cacheService.setSetLists(SET_LISTS_CACHE_KEY, formattedSetLists);
@@ -158,12 +173,8 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
     fetchSetLists();
     setupSubscriptions();
     
-    // Setup periodic refresh
-    const refreshInterval = setInterval(() => {
-      if (mountedRef.current) {
-        fetchSetLists(true);
-      }
-    }, 300000); // Refresh every 5 minutes
+    // REMOVED: Periodic polling interval setup
+    // No more setInterval for polling every 5 minutes
     
     // Cleanup on unmount
     return () => {
@@ -173,9 +184,6 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
       }
-      
-      // Clear refresh interval
-      clearInterval(refreshInterval);
       
       // Remove subscriptions
       if (setListsSubscriptionRef.current) {
