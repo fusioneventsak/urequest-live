@@ -209,14 +209,15 @@ export function KioskPage({
           style={{ backgroundColor: headerBgColor }}
         >
           {settings?.show_qr_code && (
-            <div className="absolute right-4 top-4 p-2 glass-effect rounded-lg border shadow-lg"
+            <div className="absolute right-4 top-4 p-2 glass-effect rounded-lg border shadow-lg w-auto"
               style={{
                 borderColor: accentColor,
                 boxShadow: `0 0 10px ${accentColor}40, 0 4px 15px rgba(0,0,0,0.2)`,
-                background: `linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.9))`
+                background: `linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.9))`,
+                width: 'fit-content'
               }}
             >
-              <div className="relative">
+              <div className="relative flex flex-col items-center">
                 <QRCode 
                   value={currentUrl} 
                   size={100} 
@@ -225,9 +226,7 @@ export function KioskPage({
                   level="L"
                   includeMargin={false}
                 />
-              </div>
-              <div className="text-center mt-2">
-                <div className="text-black text-xs font-bold tracking-wide uppercase">
+                <div className="text-black text-xs font-bold tracking-wide uppercase mt-2">
                   Scan to Request
                 </div>
                 <div className="flex items-center justify-center mt-1">
