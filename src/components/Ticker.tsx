@@ -60,8 +60,8 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
         }}
       />
 
-      {/* Centered Content Container - matches song container width */}
-      <div className="max-w-6xl w-full px-6 relative z-10">
+      {/* Centered Content Container - wider for better visibility */}
+      <div className="max-w-7xl w-full px-8 relative z-10">
         {customMessage ? (
           <div className="flex items-center justify-center space-x-4">
             {/* Pulsing icon */}
@@ -114,7 +114,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
             </div>
           </div>
         ) : nextSong && (
-          <div className="flex items-center justify-center space-x-8">
+            <div className="flex items-center justify-center space-x-12">
             {/* Audio visualizer - left side */}
             <div className="flex items-center space-x-1 flex-shrink-0">
               {[...Array(5)].map((_, i) => (
@@ -130,7 +130,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
             </div>
 
             {/* Center content: Album art + Next Up + Song info */}
-            <div className="flex flex-col items-center space-y-2">
+            <div className="flex flex-col items-center space-y-3">
               {/* Album Art */}
               <div className="relative">
                 {nextSong.albumArtUrl ? (
@@ -138,7 +138,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                     <img
                       src={nextSong.albumArtUrl}
                       alt="Album art"
-                      className="w-14 h-14 rounded-xl object-cover"
+                      className="w-16 h-16 rounded-xl object-cover"
                       style={{ 
                         boxShadow: `0 0 25px ${accentColor}60`,
                         border: `2px solid ${accentColor}80`
@@ -161,14 +161,14 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   </div>
                 ) : (
                   <div 
-                    className="w-14 h-14 rounded-xl flex items-center justify-center relative"
+                    className="w-16 h-16 rounded-xl flex items-center justify-center relative"
                     style={{ 
                       background: `linear-gradient(135deg, ${accentColor}40, ${secondaryColor}40)`,
                       boxShadow: `0 0 25px ${accentColor}60`,
                       border: `2px solid ${accentColor}80`
                     }}
                   >
-                    <Music className="w-7 h-7" style={{ color: accentColor }} />
+                    <Music className="w-8 h-8" style={{ color: accentColor }} />
                   </div>
                 )}
                 
@@ -181,9 +181,9 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               </div>
 
               {/* Next Up Badge and Song Info */}
-              <div className="flex flex-col items-center space-y-1 text-center">
+              <div className="flex flex-col items-center space-y-2 text-center">
                 <span 
-                  className="text-xs font-bold tracking-wider px-3 py-1 rounded-full"
+                  className="text-sm font-bold tracking-wider px-4 py-1 rounded-full"
                   style={{ 
                     background: `linear-gradient(90deg, ${accentColor}30, ${secondaryColor}30)`,
                     color: accentColor,
@@ -195,9 +195,9 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   ♪ NEXT UP ♪
                 </span>
                 
-                <div className="flex flex-col items-center space-y-0">
+                <div className="flex flex-col items-center space-y-1">
                   <h3 
-                    className="text-lg font-bold tracking-wide"
+                    className="text-xl font-bold tracking-wide whitespace-nowrap"
                     style={{
                       background: `linear-gradient(90deg, white, ${accentColor}, white)`,
                       WebkitBackgroundClip: 'text',
@@ -210,7 +210,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                   </h3>
                   {nextSong.artist && (
                     <p 
-                      className="text-sm text-gray-200 font-medium"
+                      className="text-base text-gray-200 font-medium whitespace-nowrap"
                       style={{ textShadow: `0 0 10px ${secondaryColor}40` }}
                     >
                       by {nextSong.artist}
