@@ -383,10 +383,11 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
                     </button>
                     <button
                       onClick={() => onMarkPlayed(request.id)}
-                      className="p-1 text-blue-400 hover:bg-blue-400/20 rounded-full transition-colors"
+                      className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors flex items-center"
                       title="Mark as Played"
                     >
-                      <CheckCircle2 className="w-6 h-6" />
+                      <CheckCircle2 className="w-4 h-4 mr-1" />
+                      <span className="text-xs font-medium">PLAYED</span>
                     </button>
                   </div>
                 </div>
