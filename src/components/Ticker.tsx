@@ -107,14 +107,14 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
           <div className="flex items-center justify-center space-x-4">
             {/* Pulsing icon */}
             <div 
-              className="w-12 h-12 rounded-full flex items-center justify-center relative flex-shrink-0"
+              className="w-10 h-10 rounded-full flex items-center justify-center relative flex-shrink-0"
               style={{
                 background: `linear-gradient(135deg, ${accentColor}, ${secondaryColor})`,
                 boxShadow: `0 0 20px ${accentColor}60`,
                 animation: 'iconPulse 2s ease-in-out infinite'
               }}
             >
-              <Volume2 className="w-6 h-6 text-white" />
+              <Volume2 className="w-5 h-5 text-white" />
               
               {/* Ripple effect */}
               <div 
@@ -127,14 +127,25 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
             </div>
             
             <div 
-              className="text-center text-2xl font-bold"
+              className="text-center font-bold flex-1"
               style={{
                 background: `linear-gradient(90deg, ${accentColor}, white, ${secondaryColor})`,
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 textShadow: `0 0 30px ${accentColor}80`,
-                animation: 'textShimmer 3s ease-in-out infinite'
+                animation: 'textShimmer 3s ease-in-out infinite',
+                fontSize: `${customMessage.length > 60 ? '12px' : 
+                            customMessage.length > 45 ? '14px' : 
+                            customMessage.length > 35 ? '16px' :
+                            customMessage.length > 25 ? '18px' :
+                            customMessage.length > 20 ? '20px' :
+                            customMessage.length > 15 ? '22px' : '24px'}`,
+                maxWidth: 'calc(100vw - 120px)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: '1.2'
               }}
             >
               {customMessage}
@@ -142,7 +153,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
 
             {/* Audio visualizer bars */}
             <div className="flex items-center space-x-1 flex-shrink-0">
-              {[...Array(6)].map((_, i) => (
+              {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
                   className="sound-wave"
@@ -315,6 +326,11 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
         @keyframes iconPulse {
           0%, 100% { transform: scale(1); box-shadow: 0 0 20px ${accentColor}60; }
           50% { transform: scale(1.1); box-shadow: 0 0 30px ${accentColor}80; }
+        }
+
+        @keyframes ripple {
+          0% { transform: scale(1); opacity: 0.6; }
+          100% { transform: scale(1.8); opacity: 0; }
         }
 
         @keyframes textShimmer {
