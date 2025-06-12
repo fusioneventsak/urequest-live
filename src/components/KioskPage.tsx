@@ -231,7 +231,9 @@ export function KioskPage({
                 <div className="text-white text-xs font-bold tracking-wide uppercase mt-2"
                   style={{ 
                     textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                    color: 'white'
+                    color: 'white',
+                    fontSize: '10px',
+                    lineHeight: '1.2'
                   }}
                 >
                   Scan to Request
@@ -243,10 +245,11 @@ export function KioskPage({
                       boxShadow: `0 0 6px ${accentColor}`
                     }}
                   />
-                  <div className="text-xs font-medium text-white"
+                  <div className="text-white font-medium"
                     style={{ 
                       textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-                      color: 'white'
+                      color: 'white',
+                      fontSize: '9px'
                     }}
                   >
                     LIVE
