@@ -365,17 +365,18 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
                     <button
                       onClick={() => handleLockRequest(request.id)}
                       disabled={isLocking}
-                      className={`p-1 rounded-full transition-all duration-200 ${
+                     className={`p-2 rounded-lg transition-all duration-200 flex items-center ${
                         displayLocked
-                          ? 'text-neon-pink bg-neon-pink/20'
-                          : 'text-gray-400 hover:text-neon-pink hover:bg-neon-pink/20'
-                      } ${isLocking ? 'animate-pulse' : ''}`}
+                         ? 'bg-neon-pink text-white shadow-glow'
+                         : 'bg-gray-700/50 text-gray-300 hover:bg-neon-pink/30 hover:text-white'
+                     } ${isLocking ? 'animate-pulse' : ''}`}
                       title={displayLocked ? 'Unlock' : 'Lock as Next Song'}
                       style={displayLocked ? {
-                        animation: 'pulse 2s ease-in-out infinite',
+                       animation: 'pulse 2s ease-in-out infinite'
                       } : undefined}
                     >
-                      <Lock className={`w-6 h-6 ${isLocking ? 'animate-spin' : ''}`} />
+                     <Lock className={`w-5 h-5 ${isLocking ? 'animate-spin' : ''} mr-1`} />
+                     <span className="text-sm font-medium">{displayLocked ? 'LOCKED' : 'LOCK'}</span>
                       {isOptimisticallyLocked && !isActuallyLocked && (
                         <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-pulse" />
                       )}
@@ -514,6 +515,10 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
             opacity: 0.8;
           }
         }
+
+       .shadow-glow {
+         box-shadow: 0 0 15px ${accentColor}70;
+       }
       `}</style>
     </div>
   );
