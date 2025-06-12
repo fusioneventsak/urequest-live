@@ -303,7 +303,7 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
       )}
       
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xl font-semibold neon-text">Request Queue</h2>
+        <h2 className="text-xl font-semibold neon-text">Current Requests</h2>
         <div className="text-sm text-gray-400">
           Priority = Requesters + Upvotes
         </div>
