@@ -60,8 +60,8 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
         }}
       />
 
-      {/* Centered Content Container - wider for better visibility */}
-      <div className="max-w-7xl w-full px-8 relative z-10">
+      {/* Centered Content Container - extra wide for horizontal layout */}
+      <div className="max-w-8xl w-full px-12 relative z-10">
         {customMessage ? (
           <div className="flex items-center justify-center space-x-4">
             {/* Pulsing icon */}
@@ -114,7 +114,7 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
             </div>
           </div>
         ) : nextSong && (
-            <div className="flex items-center justify-center space-x-12">
+            <div className="flex items-center justify-center space-x-16">
             {/* Audio visualizer - left side */}
             <div className="flex items-center space-x-1 flex-shrink-0">
               {[...Array(5)].map((_, i) => (
@@ -129,10 +129,10 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
               ))}
             </div>
 
-            {/* Center content: Album art + Next Up + Song info */}
-            <div className="flex flex-col items-center space-y-3">
+            {/* Center content: Album art + Next Up + Song info HORIZONTALLY */}
+            <div className="flex items-center space-x-6">
               {/* Album Art */}
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 {nextSong.albumArtUrl ? (
                   <div className="relative">
                     <img
@@ -180,22 +180,33 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
                 </div>
               </div>
 
-              {/* Next Up Badge and Song Info */}
-              <div className="flex flex-col items-center space-y-2 text-center">
-                <span 
-                  className="text-sm font-bold tracking-wider px-4 py-1 rounded-full"
-                  style={{ 
-                    background: `linear-gradient(90deg, ${accentColor}30, ${secondaryColor}30)`,
-                    color: accentColor,
-                    border: `1px solid ${accentColor}50`,
-                    boxShadow: `0 0 15px ${accentColor}30`,
-                    animation: 'badgePulse 2s ease-in-out infinite'
-                  }}
-                >
-                  ♪ NEXT UP ♪
-                </span>
+              {/* Next Up Badge + Song Info Side by Side */}
+              <div className="flex items-center space-x-6">
+                {/* Next Up Badge */}
+                <div className="flex items-center space-x-3">
+                  <span 
+                    className="text-sm font-bold tracking-wider px-4 py-1 rounded-full whitespace-nowrap"
+                    style={{ 
+                      background: `linear-gradient(90deg, ${accentColor}30, ${secondaryColor}30)`,
+                      color: accentColor,
+                      border: `1px solid ${accentColor}50`,
+                      boxShadow: `0 0 15px ${accentColor}30`,
+                      animation: 'badgePulse 2s ease-in-out infinite'
+                    }}
+                  >
+                    ♪ NEXT UP ♪
+                  </span>
+                  <Volume2 
+                    className="w-5 h-5"
+                    style={{ 
+                      color: accentColor,
+                      filter: `drop-shadow(0 0 8px ${accentColor})`
+                    }}
+                  />
+                </div>
                 
-                <div className="flex flex-col items-center space-y-1">
+                {/* Song Info */}
+                <div className="flex flex-col justify-center min-w-0">
                   <h3 
                     className="text-xl font-bold tracking-wide whitespace-nowrap"
                     style={{
