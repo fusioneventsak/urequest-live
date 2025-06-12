@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Music4 } from 'lucide-react';
 import { useUiSettings } from '../hooks/useUiSettings';
 import type { Song } from '../types';
@@ -14,41 +14,8 @@ export function SongList({ songs, onSongSelect }: SongListProps) {
   const accentColor = settings?.frontend_accent_color || '#ff00ff';
   const secondaryColor = settings?.frontend_secondary_accent || '#9d00ff';
   const containerRef = useRef<HTMLDivElement>(null);
-  const songRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [scrollProgress, setScrollProgress] = useState(0);
 
-  // Intersection observer for scroll animation
-  useEffect(() => {
-    const options = {
-      root: null,
-      rootMargin: '0px',
-      threshold: 0.1
-    };
-
-    const handleIntersect = (entries: IntersectionObserverEntry[]) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in-view');
-        } else {
-          // Optional: remove the class when out of view
-          // entry.target.classList.remove('in-view');
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(handleIntersect, options);
-    
-    // Observe all song elements
-    songRefs.current.forEach(ref => {
-      if (ref) observer.observe(ref);
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [songs.length]);
-
-  // Track scroll position for parallax effects
   useEffect(() => {
     let ticking = false;
 
@@ -71,13 +38,6 @@ export function SongList({ songs, onSongSelect }: SongListProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Ref callback for song elements
-  const setSongRef = useCallback((element: HTMLDivElement | null, id: string) => {
-    if (element) {
-      songRefs.current.set(id, element);
-    }
-  }, []);
-
   return (
     <div 
       ref={containerRef}
@@ -86,12 +46,11 @@ export function SongList({ songs, onSongSelect }: SongListProps) {
       {songs.map((song) => (
         <button
           key={song.id}
-          ref={(el) => setSongRef(el as HTMLDivElement, song.id)}
-          onClick={() => onSongSelect(song)} 
+          onClick={() => onSongSelect(song)}
           className="w-full text-left relative group"
         >
           <div 
-            className="glass-effect animate-on-scroll rounded-lg p-4 border transition-all duration-300 relative overflow-hidden h-[88px] flex items-center"
+            className="glass-effect rounded-lg p-4 border transition-all duration-300 relative overflow-hidden h-[88px] flex items-center"
             style={{
               borderColor: songBorderColor,
               boxShadow: `0 0 8px ${songBorderColor}50`,
@@ -102,6 +61,27 @@ export function SongList({ songs, onSongSelect }: SongListProps) {
               )`,
             }}
           >
+            {/* Full card glassy reflection effect */}
+            <div 
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: `
+                  linear-gradient(
+                    135deg,
+                    transparent 0%,
+                    rgba(255, 255, 255, 0.02) 15%,
+                    rgba(255, 255, 255, 0.05) 30%,
+                    rgba(255, 255, 255, 0.08) 45%,
+                    rgba(255, 255, 255, 0.05) 60%,
+                    rgba(255, 255, 255, 0.02) 75%,
+                    transparent 100%
+                  )
+                `,
+                transform: `translateX(${-50 + scrollProgress}%)`,
+                transition: 'transform 1s ease-out',
+                opacity: 0.4,
+              }}
+            />
 
             <div className="relative flex items-center gap-3 w-full">
               {song.albumArtUrl ? (

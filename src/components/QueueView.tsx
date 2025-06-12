@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback, createRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ThumbsUp, Lock, CheckCircle2, ChevronDown, ChevronUp, Users, UserCircle } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { useUiSettings } from '../hooks/useUiSettings';
@@ -26,9 +26,6 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
   const [expandedRequests, setExpandedRequests] = useState<Set<string>>(new Set());
   const [isResetting, setIsResetting] = useState(false);
   const [optimisticLocks, setOptimisticLocks] = useState<Set<string>>(new Set());
-  
-  // Ref for tracking request elements
-  const requestRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   
   // Track if component is mounted
   const mountedRef = useRef(true);
@@ -73,41 +70,6 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
       setExpandedRequests(new Set(pendingIds));
     }
   }, [requests, settings?.default_expanded_requesters]);
-
-  // Intersection observer for scroll animation
-  useEffect(() => {
-    const options = {
-      root: null,
-      rootMargin: '0px',
-      threshold: 0.1
-    };
-
-    const handleIntersect = (entries: IntersectionObserverEntry[]) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in-view');
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(handleIntersect, options);
-    
-    // Observe all request elements
-    requestRefs.current.forEach(ref => {
-      if (ref) observer.observe(ref);
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [sortedRequests.length]);
-
-  // Ref callback for request elements
-  const setRequestRef = useCallback((element: HTMLDivElement | null, id: string) => {
-    if (element) {
-      requestRefs.current.set(id, element);
-    }
-  }, []);
 
   // Log incoming requests for debugging
   useEffect(() => {
@@ -364,8 +326,7 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
           return (
             <div
               key={request.id}
-              ref={(el) => setRequestRef(el as HTMLDivElement, request.id)}
-              className={`glass-effect animate-on-scroll rounded-lg p-4 transition-all duration-300 ${
+              className={`glass-effect rounded-lg p-4 transition-all duration-300 ${
                 displayLocked ? 'request-locked' : ''
               }`}
               style={{
@@ -541,15 +502,6 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
           }
           50% {
             box-shadow: 0 0 30px ${accentColor}80;
-          }
-        }
-
-        @keyframes glass-shine {
-          0% {
-            transform: translateX(-100%);
-          }
-          100% {
-            transform: translateX(100%);
           }
         }
         
