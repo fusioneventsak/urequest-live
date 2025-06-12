@@ -516,9 +516,9 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
           }
         }
 
-       .shadow-glow {
-         box-shadow: 0 0 15px ${accentColor}70;
-       }
+        .shadow-glow {
+          box-shadow: 0 0 15px ${accentColor}70;
+        }
       `}</style>
     </div>
   );
