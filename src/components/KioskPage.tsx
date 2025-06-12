@@ -419,9 +419,13 @@ export function KioskPage({
                         e.stopPropagation(); // Prevent triggering the parent div's onClick
                         setSelectedSong(song);
                       }}
-                      className="px-3 py-1.5 rounded-lg text-white transition-colors whitespace-nowrap text-sm font-extrabold tracking-wide uppercase"
+                      className="px-3 py-1.5 rounded-lg text-white transition-all duration-200 whitespace-nowrap text-sm font-extrabold tracking-wide uppercase transform hover:scale-105 active:scale-95"
                       style={{
                         backgroundColor: accentColor,
+                        textShadow: '0 1px 3px rgba(0,0,0,0.8), 0 0 10px rgba(0,0,0,0.3)',
+                        boxShadow: `0 4px 15px ${accentColor}40, inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.2)`,
+                        border: `1px solid rgba(255,255,255,0.1)`,
+                        background: `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)`
                       }}
                     >
                       REQUEST

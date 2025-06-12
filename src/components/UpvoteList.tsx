@@ -324,12 +324,15 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
                 <button
                   onClick={(e) => handleVote(request.id, e)}
                   disabled={hasVoted}
-                  className={`px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1 font-semibold flex-shrink-0 text-white text-xs ${
+                  className={`px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1 font-semibold flex-shrink-0 text-white text-xs transform hover:scale-105 active:scale-95 ${
                     hasVoted ? 'opacity-50 cursor-not-allowed' : 'hover:bg-opacity-90'
                   }`}
                   style={{ 
                     backgroundColor: hasVoted ? '#666' : accentColor,
                     border: `1px solid ${hasVoted ? '#666' : accentColor}`,
+                    textShadow: hasVoted ? 'none' : '0 1px 2px rgba(0,0,0,0.8)',
+                    boxShadow: hasVoted ? 'none' : `0 3px 10px ${accentColor}30, inset 0 1px 0 rgba(255,255,255,0.2)`,
+                    background: hasVoted ? '#666' : `linear-gradient(135deg, ${accentColor}, ${accentColor}dd)`
                   }}
                   title={hasVoted ? 'Already voted' : 'Upvote this request'}
                 >
