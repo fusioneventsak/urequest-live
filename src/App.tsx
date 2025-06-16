@@ -294,21 +294,7 @@ function App() {
       console.log('Request already in progress, please wait...');
       toast.error('A request is already being processed. Please wait a moment and try again.');
       return false;
-    }
-    
-    requestInProgressRef.current = true;
-    
-    try {
-      // Enhanced photo size validation for database storage
-      if (data.userPhoto && data.userPhoto.startsWith('data:')) {
-        const base64Length = data.userPhoto.length - (data.userPhoto.indexOf(',') + 1);
-        const sizeKB = (base64Length * 3) / 4 / 1024;
-        
-        // 250KB limit for database storage
-        if (sizeKB > 250) {
-          throw new Error(`Your profile photo is too large (${Math.round(sizeKB)}KB). Please go back and update your profile with a smaller image (max 250KB).`);
-        }
-      }
+      // No longer needed as we're storing URLs instead of base64
 
       // First check if the song is already requested - use maybeSingle() instead of single()
       const { data: existingRequest, error: checkError } = await supabase
@@ -875,4 +861,228 @@ function App() {
     }
     
     try {
-      await updateSettings
+      await updateSettings({
+        band_logo_url: url,
+        updated_at: new Date().toISOString()
+      });
+      
+      toast.success('Logo updated successfully');
+    } catch (error) {
+      console.error('Error updating logo:', error);
+      
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('network'))
+      ) {
+        toast.error('Network error. Please check your connection and try again.');
+      } else {
+        toast.error('Failed to update logo. Please try again.');
+      }
+    }
+  }, [updateSettings, isOnline]);
+
+  // Determine what page to show
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-darker-purple flex items-center justify-center">
+        <LoadingSpinner size="lg" message="Loading application..." />
+      </div>
+    );
+  }
+
+  // Show login page if accessing backend and not authenticated
+  if (isBackend && !isAdmin) {
+    return <BackendLogin onLogin={handleAdminLogin} />;
+  }
+
+  // Show kiosk page if accessing /kiosk
+  if (isKiosk) {
+    return (
+      <ErrorBoundary>
+        <KioskPage 
+          songs={songs}
+          requests={requests}
+          activeSetList={activeSetList}
+          logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
+          onSubmitRequest={handleSubmitRequest}
+        />
+      </ErrorBoundary>
+    );
+  }
+
+  // Show backend if accessing /backend and authenticated
+  if (isBackend && isAdmin) {
+    // Define lockedRequest variable before using it
+    const lockedRequest = requests.find(r => r.isLocked && !r.isPlayed);
+    
+    return (
+      <ErrorBoundary>
+        <div className="min-h-screen bg-darker-purple">
+          <div className="max-w-7xl mx-auto p-4 sm:p-6">
+            <header className="mb-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between">
+                <div className="flex items-center mb-4 md:mb-0">
+                  <Logo 
+                    url={settings?.band_logo_url || DEFAULT_BAND_LOGO}
+                    className="h-12 mr-4"
+                  />
+                  <h1 className="text-3xl font-bold neon-text mb-2">
+                    Band Request Hub
+                  </h1>
+                </div>
+                
+                <div className="flex items-center space-x-4">
+                  {!isOnline && (
+                    <div className="px-3 py-1 bg-red-500/20 text-red-400 rounded-md text-sm flex items-center">
+                      <span className="mr-1">●</span>
+                      Offline Mode
+                    </div>
+                  )}
+                  <button 
+                    onClick={navigateToFrontend}
+                    className="neon-button"
+                  >
+                    Exit to Public View
+                  </button>
+                  <button 
+                    onClick={navigateToKiosk}
+                    className="neon-button"
+                  >
+                    Kiosk View
+                  </button>
+                  <button 
+                    onClick={handleAdminLogout}
+                    className="px-4 py-2 text-red-400 hover:bg-red-400/20 rounded-md flex items-center"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </button>
+                </div>
+              </div>
+              
+              <p className="text-gray-300 max-w-2xl mt-2 mb-4">
+                Manage your set lists, song library, and customize the request system all in one place.
+              </p>
+            </header>
+
+            <BackendTabs 
+              activeTab={activeBackendTab}
+              onTabChange={setActiveBackendTab}
+            />
+
+            <div className="space-y-8">
+              {activeBackendTab === 'requests' && (
+                <ErrorBoundary>
+                  <div className="glass-effect rounded-lg p-6">
+                    <h2 className="text-xl font-semibold neon-text mb-4">Current Request Queue</h2>
+                    <QueueView 
+                      requests={requests}
+                      onLockRequest={handleLockRequest}
+                      onMarkPlayed={handleMarkPlayed}
+                      onResetQueue={handleResetQueue}
+                    />
+                  </div>
+
+                  <ErrorBoundary>
+                    <TickerManager 
+                      nextSong={lockedRequest
+                        ? {
+                            title: lockedRequest.title,
+                            artist: lockedRequest.artist
+                          }
+                        : undefined
+                      }
+                      isActive={isTickerActive}
+                      customMessage={tickerMessage}
+                      onUpdateMessage={setTickerMessage}
+                      onToggleActive={() => setIsTickerActive(!isTickerActive)}
+                    />
+                  </ErrorBoundary>
+                </ErrorBoundary>
+              )}
+
+              {activeBackendTab === 'setlists' && (
+                <ErrorBoundary>
+                  <SetListManager 
+                    songs={songs}
+                    setLists={setLists}
+                    onCreateSetList={handleCreateSetList}
+                    onUpdateSetList={handleUpdateSetList}
+                    onDeleteSetList={handleDeleteSetList}
+                    onSetActive={handleSetActive}
+                  />
+                </ErrorBoundary>
+              )}
+
+              {activeBackendTab === 'songs' && (
+                <ErrorBoundary>
+                  <SongLibrary 
+                    songs={songs}
+                    onAddSong={handleAddSong}
+                    onUpdateSong={handleUpdateSong}
+                    onDeleteSong={handleDeleteSong}
+                  />
+                </ErrorBoundary>
+              )}
+
+              {activeBackendTab === 'settings' && (
+                <>
+                  <ErrorBoundary>
+                    <LogoManager 
+                      isAdmin={isAdmin}
+                      currentLogoUrl={settings?.band_logo_url || null}
+                      onLogoUpdate={handleLogoUpdate}
+                    />
+                  </ErrorBoundary>
+
+                  <ErrorBoundary>
+                    <ColorCustomizer isAdmin={isAdmin} />
+                  </ErrorBoundary>
+
+                  <ErrorBoundary>
+                    <SettingsManager />
+                  </ErrorBoundary>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // Show landing page if no user is set up
+  if (!currentUser) {
+    return (
+      <ErrorBoundary>
+        <LandingPage onComplete={handleUserUpdate} />
+      </ErrorBoundary>
+    );
+  }
+
+  // Show main frontend
+  return (
+    <ErrorBoundary>
+      <UserFrontend 
+        songs={songs}
+        requests={requests}
+        activeSetList={activeSetList}
+        currentUser={currentUser}
+        onSubmitRequest={handleSubmitRequest}
+        onVoteRequest={handleVoteRequest}
+        onUpdateUser={handleUserUpdate}
+        logoUrl={settings?.band_logo_url || DEFAULT_BAND_LOGO}
+        isAdmin={isAdmin}
+        onLogoClick={onLogoClick}
+        onBackendAccess={navigateToBackend}
+      />
+    </ErrorBoundary>
+  );
+}
+
+export default App;
+
+export default App
+
+export default App
