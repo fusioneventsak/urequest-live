@@ -291,7 +291,7 @@ export function getOptimalCameraConstraints() {
       facingMode: 'user', // Use front camera for profile photos
       width: { ideal: 1280 },
       height: { ideal: 720 }
-    };
+    }
   }
 }
 
