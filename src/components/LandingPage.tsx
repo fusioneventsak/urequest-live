@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Camera, User as UserIcon, AlertTriangle, UserCircle } from 'lucide-react';
 import { resizeAndCompressImage, getOptimalCameraConstraints, getOptimalFileInputAccept, supportsHighQualityCapture } from '../utils/imageUtils';
+import { dataURLtoBlob } from '../utils/photoStorage';
 import { usePhotoStorage } from '../hooks/usePhotoStorage';
 import type { User } from '../types';
 
@@ -27,11 +28,26 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
   const startCamera = async () => {
     try {
       // Get optimal camera constraints based on device
-      const constraints = getOptimalCameraConstraints();
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: 'user', // Use front camera by default
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+      
+      console.log('Requesting camera with constraints:', constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       if (videoRef.current) {
+        console.log('Camera stream obtained, setting to video element');
         videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata loaded, playing video');
+          videoRef.current?.play().catch(e => {
+            console.error('Error playing video:', e);
+          });
+        };
         setIsCapturing(true);
         setErrorMessage(null);
       }
@@ -176,29 +192,6 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
       photo: userPhoto 
     });
   };
-  
-  // Helper function to convert data URL to Blob
-  const dataURLtoBlob = (dataUrl: string): Promise<File> => {
-    return new Promise((resolve, reject) => {
-      try {
-        const arr = dataUrl.split(',');
-        const mime = arr[0].match(/:(.*?);/)?.[1];
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
-        }
-        
-        const blob = new Blob([u8arr], { type: mime });
-        const file = new File([blob], "profile-photo.jpg", { type: mime });
-        resolve(file);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  };
 
   return (
     <div className="min-h-screen bg-darker-purple flex items-center justify-center p-4">
@@ -247,6 +240,7 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
                 <video
                   ref={videoRef}
                   autoPlay
+                  muted
                   playsInline
                   className="w-full rounded-lg neon-border"
                 />

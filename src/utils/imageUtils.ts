@@ -184,6 +184,10 @@ export function getImageDimensions(dataUrl: string): Promise<{ width: number, he
 }
 
 /**
+ * Gets optimal camera constraints based on device
+ * This function has been updated to be more reliable across different devices
+ */
+/**
  * Validates an image URL by attempting to load it
  */
 export function validateImageUrl(url: string): Promise<boolean> {
@@ -282,42 +286,13 @@ export function getDeviceInfo() {
  * Get optimal camera constraints based on device
  */
 export function getOptimalCameraConstraints() {
-  const deviceInfo = getDeviceInfo();
-  
-  // Base constraints
-  let constraints: MediaStreamConstraints = {
+  return {
     video: {
-      facingMode: 'environment', // Prefer rear camera
-      width: { ideal: 1920, max: 3840 },
-      height: { ideal: 1080, max: 2160 }
-    }
-  };
-  
-  // Adjust for specific devices
-  if (deviceInfo.device.isIOS) {
-    // iOS devices typically have excellent cameras
-    constraints.video = {
-      ...constraints.video,
-      width: { ideal: 1920, max: 4032 },
-      height: { ideal: 1080, max: 3024 }
-    };
-  } else if (deviceInfo.device.brand === 'Samsung' || deviceInfo.device.brand === 'Google Pixel') {
-    // High-end Android devices
-    constraints.video = {
-      ...constraints.video,
-      width: { ideal: 1920, max: 4000 },
-      height: { ideal: 1080, max: 3000 }
-    };
-  } else if (deviceInfo.device.isAndroid) {
-    // Other Android devices - more conservative
-    constraints.video = {
-      ...constraints.video,
-      width: { ideal: 1280, max: 1920 },
-      height: { ideal: 720, max: 1080 }
+      facingMode: 'user', // Use front camera for profile photos
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
     };
   }
-  
-  return constraints;
 }
 
 /**

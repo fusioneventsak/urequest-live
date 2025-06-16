@@ -45,8 +45,28 @@ export async function uploadUserPhoto(photoFile: File, userId: string): Promise<
 export function dataURLtoBlob(dataUrl: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     try {
+      if (!dataUrl || typeof dataUrl !== 'string') {
+        reject(new Error('Invalid data URL: input is null or not a string'));
+        return;
+      }
+      
+      if (!dataUrl.startsWith('data:')) {
+        reject(new Error('Invalid data URL format: must start with "data:"'));
+        return;
+      }
+      
       const arr = dataUrl.split(',');
+      if (arr.length !== 2) {
+        reject(new Error('Invalid data URL format: missing comma separator'));
+        return;
+      }
+      
       const mime = arr[0].match(/:(.*?);/)?.[1];
+      if (!mime) {
+        reject(new Error('Invalid data URL format: could not extract MIME type'));
+        return;
+      }
+      
       const bstr = atob(arr[1]);
       let n = bstr.length;
       const u8arr = new Uint8Array(n);
@@ -56,6 +76,29 @@ export function dataURLtoBlob(dataUrl: string): Promise<Blob> {
       }
       
       resolve(new Blob([u8arr], { type: mime }));
+    } catch (error) {
+      console.error('Error converting data URL to blob:', error);
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Converts a data URL to a File
+ * @param dataUrl The data URL to convert
+ * @param fileName The name to give the file
+ * @returns A File object
+ */
+export function dataURLtoFile(dataUrl: string, fileName: string): Promise<File> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const blob = await dataURLtoBlob(dataUrl);
+      const file = new File(
+        [blob], 
+        fileName, 
+        { type: blob.type }
+      );
+      resolve(file);
     } catch (error) {
       reject(error);
     }
