@@ -10,7 +10,7 @@ const SET_LISTS_TTL = 300; // 5 minutes
 
 // Cache size limits
 const MAX_CACHE_SIZE = 50; // Maximum number of items in cache
-const MAX_CACHE_SIZE_BYTES = 2 * 1024 * 1024; // 2MB limit
+const MAX_CACHE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB limit
 
 // Cache item structure
 interface CacheItem<T> {
