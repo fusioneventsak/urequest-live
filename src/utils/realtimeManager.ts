@@ -4,9 +4,11 @@ import { nanoid } from 'nanoid';
 // Connection state tracking
 let connectionState = 'disconnected';
 let isConnecting = false;
+let activeConnectionCount = 0;
 const activeChannels = new Map();
 const connectionListeners = new Set();
 const updateTimeouts = new Map();
+const MAX_CONNECTIONS = 5; // Maximum number of concurrent connections
 
 // Client identifier
 const CLIENT_ID = nanoid(8);
@@ -35,7 +37,21 @@ export const RealtimeManager = {
    * Initialize realtime connection
    */
   init: async () => {
-    if (isConnecting || RealtimeManager.isConnected()) return;
+    if (isConnecting || RealtimeManager.isConnected()) {
+      console.log('Realtime already connected or connecting, skipping initialization');
+      return;
+    }
+    
+    // Check if we've reached the maximum number of connections
+    if (activeConnectionCount >= MAX_CONNECTIONS) {
+      console.warn(`Maximum number of connections (${MAX_CONNECTIONS}) reached. Closing oldest connection.`);
+      
+      // Close the oldest channel
+      const oldestChannelId = Array.from(activeChannels.keys())[0];
+      if (oldestChannelId) {
+        await RealtimeManager.removeSubscription(oldestChannelId);
+      }
+    }
     
     isConnecting = true;
     updateConnectionState('connecting');
@@ -47,6 +63,7 @@ export const RealtimeManager = {
       if (RealtimeManager.isConnected()) {
         console.log('✅ Realtime connection established successfully');
         updateConnectionState('connected');
+        activeConnectionCount++;
         
         // Log successful connection
         try {
@@ -90,6 +107,7 @@ export const RealtimeManager = {
    * Create a subscription to a table with optimized event handling
    */
   createSubscription: (table, callback, filter) => {
+    // Generate a unique channel ID
     const channelId = `${table}_${nanoid(6)}`;
     
     try {
@@ -98,7 +116,8 @@ export const RealtimeManager = {
       const channel = supabase.channel(channelId, {
         config: {
           presence: { key: CLIENT_ID },
-          broadcast: { self: false },
+          broadcast: { self: false, ack: true },
+          transport: { method: 'websocket' },
           // Reduce event frequency to prevent overwhelming clients
           params: { eventsPerSecond: 8 }
         }
@@ -106,6 +125,7 @@ export const RealtimeManager = {
       
       // Configure channel
       channel.on(
+        // Use postgres_changes for database events
         'postgres_changes',
         filter || { event: '*', schema: 'public', table },
         (payload) => {
@@ -125,7 +145,7 @@ export const RealtimeManager = {
             }
             console.log(`🔔 ${table} table changed:`, payload.eventType);
             
-            // Debounce rapid updates for the same table
+            // Debounce rapid updates to reduce processing overhead
             clearTimeout(updateTimeouts.get(channelId));
             updateTimeouts.set(channelId, setTimeout(() => {
               callback(payload);
@@ -134,7 +154,12 @@ export const RealtimeManager = {
             console.error(`Error in subscription callback (${channelId}):`, error);
           }
         }
-      ).subscribe((status) => {
+      )
+      // Add error handling for channel
+      .on('error', (error) => {
+        console.error(`Channel ${channelId} error:`, error);
+      })
+      .subscribe((status) => {
         console.log(`Channel ${channelId} status:`, status);
       });
       
@@ -156,6 +181,7 @@ export const RealtimeManager = {
     if (!channelInfo) return;
     
     try {
+      console.log(`Removing subscription ${channelId}`);
       await channelInfo.channel.unsubscribe();
       supabase.removeChannel(channelInfo.channel);
       activeChannels.delete(channelId);
@@ -163,6 +189,9 @@ export const RealtimeManager = {
       // Clear any pending timeouts for this channel
       clearTimeout(updateTimeouts.get(channelId));
       updateTimeouts.delete(channelId);
+      
+      // Decrement active connection count
+      activeConnectionCount = Math.max(0, activeConnectionCount - 1);
     } catch (error) {
       console.warn(`Error removing subscription ${channelId}:`, error);
     }
@@ -205,6 +234,7 @@ export const RealtimeManager = {
     }
     
     // Close all existing channels
+    console.log(`Closing ${activeChannels.size} active channels before reconnection`);
     for (const [id, info] of activeChannels.entries()) {
       try {
         await info.channel.unsubscribe();
@@ -219,6 +249,9 @@ export const RealtimeManager = {
     }
     
     activeChannels.clear();
+    // Reset active connection count
+    activeConnectionCount = 0;
+    updateTimeouts.clear();
     
     // Reconnect
     return RealtimeManager.init();
@@ -228,6 +261,7 @@ export const RealtimeManager = {
    * Clean up all subscriptions
    */
   cleanup: async () => {
+    console.log(`Cleaning up ${activeChannels.size} active channels`);
     // Close all channels
     for (const [id, info] of activeChannels.entries()) {
       try {
@@ -244,6 +278,7 @@ export const RealtimeManager = {
     
     activeChannels.clear();
     connectionListeners.clear();
+    activeConnectionCount = 0;
     
     // Log disconnection
     try {
@@ -258,6 +293,16 @@ export const RealtimeManager = {
     } catch (error) {
       console.warn('Failed to log disconnection:', error);
     }
+  },
+  
+  /**
+   * Get active connection stats
+   */
+  getStats: () => {
+    return {
+      activeConnections: activeConnectionCount,
+      activeChannels: activeChannels.size
+    };
   }
 };
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Wifi, WifiOff, AlertTriangle, Activity } from 'lucide-react';
 import { useConnectionHealth } from '../hooks/useConnectionHealth';
 
 interface ConnectionStatusProps {
@@ -8,7 +8,7 @@ interface ConnectionStatusProps {
 }
 
 export function ConnectionStatus({ className = '', showDetails = false }: ConnectionStatusProps) {
-  const { status, reconnectAttempts, reconnect } = useConnectionHealth();
+  const { status, reconnectAttempts, reconnect, spinCapUsage } = useConnectionHealth();
   
   if (status === 'good' && !showDetails) {
     return null; // Don't show anything when connection is good
@@ -48,6 +48,12 @@ export function ConnectionStatus({ className = '', showDetails = false }: Connec
       {showDetails && reconnectAttempts > 0 && (
         <span className="ml-2 text-xs text-gray-400">
           ({reconnectAttempts} reconnect attempts)
+          {spinCapUsage > 0 && (
+            <span className="ml-2 flex items-center">
+              <Activity className="w-3 h-3 mr-1" />
+              {Math.round(spinCapUsage * 100)}% cap
+            </span>
+          )}
         </span>
       )}
     </div>
