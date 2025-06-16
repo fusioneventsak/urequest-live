@@ -11,19 +11,13 @@ import { resizeAndCompressImage } from './imageUtils';
 export async function uploadUserPhoto(photoFile: File, userId: string): Promise<string> {
   try {
     // Generate a unique filename
-    const fileExt = photoFile.name.split('.').pop();
+    const fileExt = photoFile.name.split('.').pop() || 'jpg';
     const fileName = `${userId}/avatar-${uuidv4()}.${fileExt}`;
-    
-    // Compress the image before uploading
-    const compressedImage = await resizeAndCompressImage(photoFile, 300, 300, 0.8);
-    
-    // Convert data URL to Blob for upload
-    const blob = await dataURLtoBlob(compressedImage);
     
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from('user-photos')
-      .upload(fileName, blob, {
+      .upload(fileName, photoFile, {
         cacheControl: '3600',
         upsert: true,
         contentType: `image/${fileExt}`
