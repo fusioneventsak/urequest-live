@@ -296,6 +296,7 @@ function App() {
       return false;
       // No longer needed as we're storing URLs instead of base64
 
+    try {
       // First check if the song is already requested - use maybeSingle() instead of single()
       const { data: existingRequest, error: checkError } = await supabase
         .from('requests')
@@ -1082,7 +1083,3 @@ function App() {
 }
 
 export default App;
-
-export default App
-
-export default App
