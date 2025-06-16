@@ -76,6 +76,14 @@ export function UserFrontend({
     return songs;
   }, [songs, activeSetList]);
 
+  // Log when active set list changes
+  useEffect(() => {
+    if (activeSetList) {
+      console.log(`Active set list updated in UserFrontend: ${activeSetList.name} (${activeSetList.id})`);
+    } else {
+      console.log('No active set list in UserFrontend');
+    }
+  }, [activeSetList]);
   // Filter available songs based on search term
   const filteredSongs = useMemo(() => {
     if (!searchTerm.trim()) return availableSongs;

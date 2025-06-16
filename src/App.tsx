@@ -291,6 +291,14 @@ function App() {
   // Update active set list when set lists change
   useEffect(() => {
     const active = setLists.find(sl => sl.isActive);
+    
+    // Log active set list changes
+    if (active) {
+      console.log(`Active set list updated in App: ${active.name} (${active.id})`);
+    } else if (setLists.length > 0) {
+      console.log('No active set list found among', setLists.length, 'set lists');
+    }
+    
     setActiveSetList(active || null);
   }, [setLists]);
 

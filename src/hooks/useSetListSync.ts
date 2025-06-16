@@ -16,6 +16,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
   const setListsSubscriptionRef = useRef<string | null>(null);
   const setListSongsSubscriptionRef = useRef<string | null>(null);
   const setListActivationSubscriptionRef = useRef<string | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fetchInProgressRef = useRef(false);
 
@@ -27,6 +28,25 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
       return;
     }
     
+    // Debounce frequent calls (but allow bypass for critical updates)
+    const now = Date.now();
+    if (!bypassCache && now - lastFetchTimeRef.current < 300) { // 300ms debounce
+      console.log('Debouncing set list fetch...');
+      
+      // Clear any existing timeout
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+      
+      // Set a new timeout to fetch after debounce period
+      fetchTimeoutRef.current = setTimeout(() => {
+        fetchSetLists(bypassCache);
+      }, 300);
+      
+      return;
+    }
+    
+    lastFetchTimeRef.current = now;
     fetchInProgressRef.current = true;
     
     try {
@@ -94,6 +114,13 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
             }))
         }));
 
+        // Log active set list for debugging
+        const activeSetList = formattedSetLists.find(sl => sl.isActive);
+        if (activeSetList) {
+          console.log(`Active set list found: ${activeSetList.name} (${activeSetList.id})`);
+        } else {
+          console.log('No active set list found');
+        }
         cacheService.setSetLists(SET_LISTS_CACHE_KEY, formattedSetLists);
         onUpdate(formattedSetLists);
         setRetryCount(0); // Reset retry count on success
@@ -195,6 +222,12 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
     
     // REMOVED: Periodic polling interval setup
     // No more setInterval for polling every 5 minutes
+    // Add a polling interval as a fallback for production environments
+    // where realtime might be less reliable
+    const pollingInterval = setInterval(() => {
+      console.log('Polling for set list updates...');
+      fetchSetLists(true);
+    }, 10000); // Poll every 10 seconds
     
     // Cleanup on unmount
     return () => {
@@ -204,6 +237,9 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
       if (fetchTimeoutRef.current) {
         clearTimeout(fetchTimeoutRef.current);
       }
+      
+      // Clear polling interval
+      clearInterval(pollingInterval);
       
       // Remove subscriptions
       if (setListsSubscriptionRef.current) {

@@ -11,6 +11,10 @@ const updateTimeouts = new Map();
 // Client identifier
 const CLIENT_ID = nanoid(8);
 
+// Debug flag for production environment
+const IS_PRODUCTION = window.location.hostname !== 'localhost' && 
+                      !window.location.hostname.includes('stackblitz') &&
+                      !window.location.hostname.includes('127.0.0.1');
 // Connection management
 export const RealtimeManager = {
   /**
@@ -37,9 +41,11 @@ export const RealtimeManager = {
     updateConnectionState('connecting');
     
     try {
+      console.log('Initializing realtime connection...');
       await supabase.realtime.connect();
       
       if (RealtimeManager.isConnected()) {
+        console.log('✅ Realtime connection established successfully');
         updateConnectionState('connected');
         
         // Log successful connection
@@ -55,6 +61,7 @@ export const RealtimeManager = {
           console.warn('Failed to log connection:', error);
         }
       } else {
+        console.warn('❌ Failed to establish realtime connection');
         updateConnectionState('disconnected');
       }
     } catch (error) {
@@ -103,6 +110,19 @@ export const RealtimeManager = {
         filter || { event: '*', schema: 'public', table },
         (payload) => {
           try {
+            // More detailed logging in production to help debug issues
+            if (IS_PRODUCTION) {
+              console.log(`🔔 ${table} table changed:`, {
+                eventType: payload.eventType,
+                table: payload.table,
+                schema: payload.schema,
+                hasNew: !!payload.new,
+                hasOld: !!payload.old,
+                timestamp: new Date().toISOString()
+              });
+            } else {
+              console.log(`🔔 ${table} table changed:`, payload.eventType);
+            }
             console.log(`🔔 ${table} table changed:`, payload.eventType);
             
             // Debounce rapid updates for the same table
@@ -169,6 +189,7 @@ export const RealtimeManager = {
    * Force reconnection
    */
   reconnect: async () => {
+    console.log('🔄 Manual reconnection requested');
     // Log reconnection attempt
     try {
       await supabase

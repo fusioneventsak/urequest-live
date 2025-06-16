@@ -24,12 +24,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       eventsPerSecond: 10, // Increased from 5 to improve realtime responsiveness
     },
     reconnect: {
-      maxRetries: 10,
-      delay: 1000
+      maxRetries: 20, // Increased for better reliability in production
+      delay: 2000, // Increased to reduce server load
+      timeout: 60000 // 60 second timeout for connection attempts
     }
   },
 });
 
+// Log Supabase configuration for debugging
+console.log('Supabase configuration:', {
+  url: supabaseUrl,
+  hasAnonKey: !!supabaseAnonKey,
+  isProduction: window.location.hostname !== 'localhost' && 
+               !window.location.hostname.includes('stackblitz') &&
+               !window.location.hostname.includes('127.0.0.1')
+});
 // Helper function to handle Supabase errors
 export function handleSupabaseError(error: any): never {
   console.error('Supabase error:', error);
