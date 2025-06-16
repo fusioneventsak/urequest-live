@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Camera, User as UserIcon, AlertTriangle, UserCircle } from 'lucide-react';
 import { resizeAndCompressImage, getOptimalCameraConstraints, getOptimalFileInputAccept, supportsHighQualityCapture } from '../utils/imageUtils';
+import { usePhotoStorage } from '../hooks/usePhotoStorage';
 import type { User } from '../types';
 
 interface LandingPageProps {
@@ -18,6 +19,7 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { uploadPhoto, getDefaultAvatar } = usePhotoStorage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,16 +62,10 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
           try {
             const compressedPhoto = await resizeAndCompressImage(photoData, 300, 300, 0.8);
             
-            // Verify compressed photo size before accepting
-            const base64Length = compressedPhoto.length - (compressedPhoto.indexOf(',') + 1);
-            const size = (base64Length * 3) / 4;
-            
-            if (size > MAX_PHOTO_SIZE) {
-              setErrorMessage(`Image is too large (${Math.round(size/1024)}KB). Maximum size is ${Math.round(MAX_PHOTO_SIZE/1024)}KB. Please try again.`);
-              return;
-            }
-            
-            setPhoto(compressedPhoto);
+            // Instead of storing base64 in state, upload to storage and store URL
+            const userId = initialUser?.id || name.toLowerCase().replace(/\s+/g, '-');
+            const photoUrl = await uploadPhoto(await dataURLtoBlob(compressedPhoto), userId);
+            setPhoto(photoUrl);
             stopCamera();
           } catch (error) {
             if (error instanceof Error) {
@@ -116,16 +112,10 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
             // Use higher resolution and quality for compression to maintain image quality
             const compressedPhoto = await resizeAndCompressImage(reader.result as string, 300, 300, 0.8);
             
-            // Verify compressed photo size before accepting
-            const base64Length = compressedPhoto.length - (compressedPhoto.indexOf(',') + 1);
-            const size = (base64Length * 3) / 4;
-            
-            if (size > MAX_PHOTO_SIZE) {
-              setErrorMessage(`Image is still too large after compression (${Math.round(size/1024)}KB). Maximum size is ${Math.round(MAX_PHOTO_SIZE/1024)}KB. Please try a different image.`);
-              return;
-            }
-            
-            setPhoto(compressedPhoto);
+            // Instead of storing base64 in state, upload to storage and store URL
+            const userId = initialUser?.id || name.toLowerCase().replace(/\s+/g, '-');
+            const photoUrl = await uploadPhoto(await dataURLtoBlob(compressedPhoto), userId);
+            setPhoto(photoUrl);
           } catch (error) {
             if (error instanceof Error) {
               setErrorMessage(error.message);
@@ -177,19 +167,8 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
       return;
     }
     
-    // Create a default avatar if no photo was provided
-    const userPhoto = photo || generateDefaultAvatar(name);
-    
-    // If we have a photo, verify size
-    if (photo) {
-      const base64Length = photo.length - (photo.indexOf(',') + 1);
-      const size = (base64Length * 3) / 4;
-      
-      if (size > MAX_PHOTO_SIZE) {
-        setErrorMessage(`Photo is too large (${Math.round(size/1024)}KB). Maximum size is ${Math.round(MAX_PHOTO_SIZE/1024)}KB. Please try again with a smaller image.`);
-        return;
-      }
-    }
+    // Use the photo URL or generate a default avatar
+    const userPhoto = photo || getDefaultAvatar(name);
     
     onComplete({ 
       id: initialUser?.id || name.toLowerCase().replace(/\s+/g, '-'), 
@@ -198,27 +177,27 @@ export function LandingPage({ onComplete, initialUser }: LandingPageProps) {
     });
   };
   
-  const generateDefaultAvatar = (name: string): string => {
-    // Generate a simple SVG with the user's initials
-    const initials = name.split(' ')
-      .map(part => part.charAt(0).toUpperCase())
-      .slice(0, 2)
-      .join('');
-    
-    // Random pastel background color
-    const hue = Math.floor(Math.random() * 360);
-    const bgColor = `hsl(${hue}, 70%, 80%)`;
-    const textColor = '#333';
-      
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
-        <rect width="100" height="100" fill="${bgColor}" />
-        <text x="50" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" 
-              fill="${textColor}" text-anchor="middle" dominant-baseline="central">${initials}</text>
-      </svg>
-    `;
-    
-    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  // Helper function to convert data URL to Blob
+  const dataURLtoBlob = (dataUrl: string): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        
+        const blob = new Blob([u8arr], { type: mime });
+        const file = new File([blob], "profile-photo.jpg", { type: mime });
+        resolve(file);
+      } catch (error) {
+        reject(error);
+      }
+    });
   };
 
   return (

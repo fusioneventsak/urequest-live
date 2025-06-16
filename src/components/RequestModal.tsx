@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Music4, AlertTriangle } from 'lucide-react';
 import type { Song, User } from '../types';
-import { resizeAndCompressImage } from '../utils/imageUtils';
+import { usePhotoStorage } from '../hooks/usePhotoStorage';
 
 interface RequestModalProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ export function RequestModal({
   onSubmit,
   currentUser
 }: RequestModalProps) {
+  const { getDefaultAvatar } = usePhotoStorage();
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,31 +39,11 @@ export function RequestModal({
       // Ensure message is properly trimmed and truncated
       const truncatedMessage = message.trim().slice(0, 100);
       
-      // Create a small thumbnail of the user photo for the request
-      let userPhotoThumbnail = '';
-      if (currentUser.photo && currentUser.photo.startsWith('data:')) {
-        try {
-          // Create a very small thumbnail (40x40px) with high compression for minimal payload
-          userPhotoThumbnail = await resizeAndCompressImage(
-            currentUser.photo,
-            40, // Small width for thumbnail
-            40, // Small height for thumbnail  
-            0.6 // Lower quality for smaller size
-          );
-        } catch (photoError) {
-          console.warn('Failed to compress user photo for request:', photoError);
-          // Continue without photo if compression fails
-        }
-      } else if (currentUser.photo) {
-        // If it's already a URL (not base64), use it as-is
-        userPhotoThumbnail = currentUser.photo;
-      }
-      
       const requestData = {
         title: song.title,
         artist: song.artist || '',
         requestedBy: currentUser.name,
-        userPhoto: userPhotoThumbnail, // Small compressed thumbnail
+        userPhoto: currentUser.photo || getDefaultAvatar(currentUser.name), // Use URL instead of base64
         message: truncatedMessage,
         userId: currentUser.id || currentUser.name
       };

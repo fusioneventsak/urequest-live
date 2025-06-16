@@ -12,6 +12,7 @@ import { useSetListSync } from './hooks/useSetListSync';
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
 import type { Song, SongRequest, RequestFormData, SetList, User } from './types';
+import { generateDefaultAvatar } from './utils/photoStorage';
 import { LogOut } from 'lucide-react';
 
 // Import the backend components
@@ -58,7 +59,7 @@ function App() {
   const [isAppActive, setIsAppActive] = useState(true);
   
   // Ref to track if component is mounted
-  const mountedRef = useRef(true);
+  const mountedRef = useRef<boolean>(true);
   const requestInProgressRef = useRef(false);
   const requestRetriesRef = useRef(0);
   
@@ -410,30 +411,6 @@ function App() {
     // Empty function to handle logo clicks
   }, []);
 
-  // Generate default avatar
-  const generateDefaultAvatar = (name: string): string => {
-    // Generate a simple SVG with the user's initials
-    const initials = name.split(' ')
-      .map(part => part.charAt(0).toUpperCase())
-      .slice(0, 2)
-      .join('');
-    
-    // Random pastel background color
-    const hue = Math.floor(Math.random() * 360);
-    const bgColor = `hsl(${hue}, 70%, 80%)`;
-    const textColor = '#333';
-      
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
-        <rect width="100" height="100" fill="${bgColor}" />
-        <text x="50" y="50" font-family="Arial, sans-serif" font-size="40" font-weight="bold" 
-              fill="${textColor}" text-anchor="middle" dominant-baseline="central">${initials}</text>
-      </svg>
-    `;
-    
-    return `data:image/svg+xml;base64,${btoa(svg)}`;
-  };
-
   // Handle song request submission with retry logic and enhanced photo support
   const handleSubmitRequest = useCallback(async (data: RequestFormData): Promise<boolean> => {
     if (requestInProgressRef.current) {
@@ -448,15 +425,7 @@ function App() {
       console.log('Submitting request:', data);
       
       // Enhanced photo size validation for database storage
-      if (data.userPhoto && data.userPhoto.startsWith('data:')) {
-        const base64Length = data.userPhoto.length - (data.userPhoto.indexOf(',') + 1);
-        const sizeKB = (base64Length * 3) / 4 / 1024;
-        
-        // 250KB limit for database storage
-        if (sizeKB > 250) {
-          throw new Error(`Your profile photo is too large (${Math.round(sizeKB)}KB). Please go back and update your profile with a smaller image (max 250KB).`);
-        }
-      }
+      // No longer needed as we're storing URLs instead of base64
 
       // First check if the song is already requested - use maybeSingle() instead of single()
       const { data: existingRequest, error: checkError } = await supabase
@@ -573,7 +542,7 @@ function App() {
     } finally {
       requestInProgressRef.current = false;
     }
-  }, [reconnectRequests, compressPhoto]);
+  }, [reconnectRequests]);
 
   // Handle request vote with error handling
   const handleVoteRequest = useCallback(async (id: string): Promise<boolean> => {

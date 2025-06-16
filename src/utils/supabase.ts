@@ -8,6 +8,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
+// Configure connection pooling
+const POOL_SIZE = 10;
+const CONNECTION_TIMEOUT = 30000; // 30 seconds
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -16,12 +20,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      'X-Client-Info': 'song-request-app/1.0.0',
+      'X-Client-Info': 'song-request-app/1.1.0',
+      'X-Connection-Pool': `${POOL_SIZE}`,
+      'X-Connection-Timeout': `${CONNECTION_TIMEOUT}`
     },
   },
   realtime: {
     params: {
       eventsPerSecond: 10, // Increased from 5 to improve realtime responsiveness
+      // Exclude photo data from realtime updates to reduce payload size
+      excludeColumns: ['photo', 'userPhoto']
     },
     reconnect: {
       maxRetries: 20, // Increased for better reliability in production
@@ -29,6 +37,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       timeout: 60000 // 60 second timeout for connection attempts
     }
   },
+  db: {
+    schema: 'public',
+    // Configure connection pooling
+    poolSize: POOL_SIZE,
+    connectionTimeout: CONNECTION_TIMEOUT
+  }
 });
 
 // Log Supabase configuration for debugging
@@ -138,10 +152,16 @@ export async function executeDbOperation<T>(
 export function formatRequestData(request: any) {
   return {
     ...request,
-    requesters: request.requesters?.map((requester: any) => ({
-      ...requester,
-      timestamp: new Date(requester.created_at)
-    })) || []
+    requesters: request.requesters?.map((requester: any) => {
+      // Optimize payload by excluding large photo data from memory
+      const { photo, ...rest } = requester;
+      return {
+        ...rest,
+        // Keep photo URL but not base64 data
+        photo: photo && photo.startsWith('data:') ? null : photo,
+        timestamp: new Date(requester.created_at)
+      };
+    }) || []
   };
 }
 
