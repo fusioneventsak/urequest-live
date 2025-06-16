@@ -294,7 +294,9 @@ function App() {
       console.log('Request already in progress, please wait...');
       toast.error('A request is already being processed. Please wait a moment and try again.');
       return false;
-      // No longer needed as we're storing URLs instead of base64
+    }
+    
+    requestInProgressRef.current = true;
 
     try {
       // First check if the song is already requested - use maybeSingle() instead of single()
