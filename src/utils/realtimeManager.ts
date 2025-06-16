@@ -86,6 +86,7 @@ export const RealtimeManager = {
     const channelId = `${table}_${nanoid(6)}`;
     
     try {
+      console.log(`Creating subscription for ${table}`, filter || 'no filter');
       // Create channel with optimized config
       const channel = supabase.channel(channelId, {
         config: {

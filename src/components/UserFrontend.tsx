@@ -69,8 +69,10 @@ export function UserFrontend({
   // Get available songs - if active set list exists, only show songs from that set list
   const availableSongs = useMemo(() => {
     if (activeSetList && activeSetList.songs && activeSetList.songs.length > 0) {
+      console.log(`Using songs from active set list: ${activeSetList.name} (${activeSetList.songs.length} songs)`);
       return activeSetList.songs;
     }
+    console.log(`No active set list, showing all ${songs.length} songs`);
     return songs;
   }, [songs, activeSetList]);
 

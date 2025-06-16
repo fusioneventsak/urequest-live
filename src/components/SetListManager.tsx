@@ -83,8 +83,10 @@ export function SetListManager({
     setIsActivating(id);
     
     try {
+      console.log(`Setting set list ${id} active state...`);
       // Use the external activation handler
       await onSetActive(id);
+      console.log(`Set list ${id} activation state updated successfully`);
     } catch (error) {
       console.error('Error setting active set list:', error);
     } finally {
@@ -703,7 +705,7 @@ export function SetListManager({
                     ) : setList.isActive ? (
                       <>
                         <Check className="w-4 h-4" />
-                        <span>Deactivate</span>
+                        <span>Active</span>
                       </>
                     ) : (
                       <>

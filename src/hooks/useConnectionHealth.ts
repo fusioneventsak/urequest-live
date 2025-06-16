@@ -34,7 +34,7 @@ export function useConnectionHealth() {
         
         // Auto-reconnect if no updates for 15 seconds
         if (now - lastUpdate > 15000) {
-          console.warn('No updates received for 15 seconds, attempting reconnection');
+          console.warn('🔄 No updates received for 15 seconds, attempting reconnection');
           RealtimeManager.reconnect();
           setReconnectAttempts(prev => prev + 1);
         }
@@ -45,6 +45,7 @@ export function useConnectionHealth() {
     
     // Listen for connection state changes
     const handleConnectionChange = (state: string) => {
+      console.log(`Connection state changed to: ${state}`);
       if (state === 'connected') {
         setStatus('good');
       } else if (state === 'disconnected') {

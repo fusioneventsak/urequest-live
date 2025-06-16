@@ -15,6 +15,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
   const mountedRef = useRef(true);
   const setListsSubscriptionRef = useRef<string | null>(null);
   const setListSongsSubscriptionRef = useRef<string | null>(null);
+  const setListActivationSubscriptionRef = useRef<string | null>(null);
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fetchInProgressRef = useRef(false);
 
@@ -162,9 +163,27 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
             fetchSetLists(true);
           }
         );
+        // Subscribe specifically to set list activation changes
+        const setListActivationSub = RealtimeManager.createSubscription(
+          'set_lists',
+          (payload) => {
+            console.log('🔔 Set list activation changed:', payload);
+            // If this is an update and is_active changed, fetch immediately with high priority
+            if (payload.eventType === 'UPDATE' && 
+                payload.new && payload.old && 
+                payload.new.is_active !== payload.old.is_active) {
+              console.log('⚡ Set list activation state changed - immediate update');
+              // Clear cache and fetch fresh data
+              cacheService.del(SET_LISTS_CACHE_KEY);
+              fetchSetLists(true);
+            }
+          },
+          { event: 'UPDATE', schema: 'public', table: 'set_lists', filter: `is_active=eq.true` }
+        );
         
         setListsSubscriptionRef.current = setListsSub;
         setListSongsSubscriptionRef.current = setListSongsSub;
+        setListActivationSubscriptionRef.current = setListActivationSub;
       } catch (error) {
         console.error('Error setting up realtime subscriptions:', error);
       }
@@ -193,6 +212,9 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
       
       if (setListSongsSubscriptionRef.current) {
         RealtimeManager.removeSubscription(setListSongsSubscriptionRef.current);
+      }
+      if (setListActivationSubscriptionRef.current) {
+        RealtimeManager.removeSubscription(setListActivationSubscriptionRef.current);
       }
     };
   }, [fetchSetLists]);

@@ -63,8 +63,10 @@ export function KioskPage({
   // Get available songs - if active set list exists, only show songs from that set list
   const availableSongs = useMemo(() => {
     if (activeSetList && activeSetList.songs && activeSetList.songs.length > 0) {
+      console.log(`Kiosk: Using songs from active set list: ${activeSetList.name} (${activeSetList.songs.length} songs)`);
       return activeSetList.songs;
     }
+    console.log(`Kiosk: No active set list, showing all ${songs.length} songs`);
     return songs;
   }, [songs, activeSetList]);
 

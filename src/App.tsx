@@ -969,12 +969,14 @@ function App() {
     }
     
     try {
+      console.log(`Activating/deactivating set list ${id}`);
       // Get the current set list
       const setList = setLists.find(sl => sl.id === id);
       if (!setList) return;
       
       // Toggle active state
       const newActiveState = !setList.isActive;
+      console.log(`Setting set list ${id} active state to: ${newActiveState}`);
       
       // Update in database (using snake_case for database field names)
       const { error } = await supabase
