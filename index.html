@@ -6,22 +6,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite + React + TS</title>
     <script>
-      // Apply saved colors immediately before any rendering occurs
+      // Apply default colors immediately before any rendering occurs
       (function() {
         try {
+          // First try to get saved colors from localStorage
           const savedColors = localStorage.getItem('uiColors');
+          
+          // Define default colors to use if no saved colors exist
+          const defaultColors = {
+            '--frontend-bg-color': '#13091f',
+            '--frontend-accent-color': '#ff00ff',
+            '--frontend-header-bg': '#13091f',
+            '--frontend-secondary-accent': '#9d00ff',
+            '--song-border-color': '#ff00ff',
+            '--neon-pink': '#ff00ff',
+            '--neon-purple': '#9d00ff',
+            '--nav-bg-color': '#0f051d',
+            '--highlight-color': '#ff00ff'
+          };
+          
+          const root = document.documentElement;
+          
           if (savedColors) {
+            // Apply saved colors if available
             const colors = JSON.parse(savedColors);
-            const root = document.documentElement;
-            
             Object.entries(colors).forEach(([key, value]) => {
               root.style.setProperty(key, value);
             });
-            
             console.log('Applied saved colors from localStorage before initial render');
+          } else {
+            // Apply default colors if no saved colors exist
+            Object.entries(defaultColors).forEach(([key, value]) => {
+              root.style.setProperty(key, value);
+            });
+            console.log('Applied default colors before initial render');
           }
         } catch (e) {
-          console.error('Error applying saved colors:', e);
+          console.error('Error applying colors:', e);
         }
       })();
     </script>
