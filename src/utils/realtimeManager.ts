@@ -60,27 +60,48 @@ export const RealtimeManager = {
       console.log('Initializing realtime connection...');
       await supabase.realtime.connect();
       
-      if (RealtimeManager.isConnected()) {
-        console.log('✅ Realtime connection established successfully');
-        updateConnectionState('connected');
-        activeConnectionCount++;
-        
-        // Log successful connection
-        try {
-          await supabase
+      // Don't check connection status immediately - let the connection process complete
+      // The Supabase client will emit events when the connection is established
+      console.log('Realtime connection request sent, waiting for connection events...');
+      
+      // Set up a listener for the connection state
+      const unsubscribe = supabase.realtime.onStateChange((event) => {
+        if (event === 'CONNECTED') {
+          console.log('✅ Realtime connection established successfully');
+          updateConnectionState('connected');
+          activeConnectionCount++;
+          
+          // Log successful connection
+          supabase
             .from('realtime_connection_logs')
             .insert({
               status: 'connected',
               client_id: CLIENT_ID,
               created_at: new Date().toISOString()
+            })
+            .then(() => {
+              console.log('Connection logged successfully');
+            })
+            .catch((error) => {
+              console.warn('Failed to log connection:', error);
             });
-        } catch (error) {
-          console.warn('Failed to log connection:', error);
+          
+          // Remove this listener after connection is established
+          unsubscribe();
+        } else if (event === 'DISCONNECTED' || event === 'CLOSED') {
+          console.warn(`Realtime connection state: ${event}`);
+          updateConnectionState('disconnected');
         }
-      } else {
-        console.warn('❌ Failed to establish realtime connection');
-        updateConnectionState('disconnected');
-      }
+      });
+      
+      // Set a timeout to prevent hanging if connection never completes
+      setTimeout(() => {
+        if (connectionState === 'connecting') {
+          console.warn('Connection timeout - no state change event received');
+          updateConnectionState('disconnected');
+          unsubscribe();
+        }
+      }, 10000); // 10 second timeout
     } catch (error) {
       console.error('Error connecting to realtime:', error);
       updateConnectionState('error', error instanceof Error ? error : new Error(String(error)));
