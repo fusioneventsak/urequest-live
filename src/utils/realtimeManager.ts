@@ -17,6 +17,7 @@ const CLIENT_ID = nanoid(8);
 const IS_PRODUCTION = window.location.hostname !== 'localhost' && 
                       !window.location.hostname.includes('stackblitz') &&
                       !window.location.hostname.includes('127.0.0.1');
+
 // Connection management
 export const RealtimeManager = {
   /**
@@ -60,46 +61,49 @@ export const RealtimeManager = {
       console.log('Initializing realtime connection...');
       await supabase.realtime.connect();
       
-      // Don't check connection status immediately - let the connection process complete
-      // The Supabase client will emit events when the connection is established
-      console.log('Realtime connection request sent, waiting for connection events...');
-      
-      // Set up a listener for the connection state
-      const unsubscribe = supabase.realtime.onStateChange((event) => {
-        if (event === 'CONNECTED') {
-          console.log('✅ Realtime connection established successfully');
-          updateConnectionState('connected');
-          activeConnectionCount++;
-          
-          // Log successful connection
-          supabase
+      // Check connection status after connect() call
+      if (RealtimeManager.isConnected()) {
+        console.log('✅ Realtime connection established successfully');
+        updateConnectionState('connected');
+        activeConnectionCount++;
+        
+        // Log successful connection
+        try {
+          await supabase
             .from('realtime_connection_logs')
             .insert({
               status: 'connected',
               client_id: CLIENT_ID,
               created_at: new Date().toISOString()
-            })
-            .then(() => {
-              console.log('Connection logged successfully');
-            })
-            .catch((error) => {
-              console.warn('Failed to log connection:', error);
             });
-          
-          // Remove this listener after connection is established
-          unsubscribe();
-        } else if (event === 'DISCONNECTED' || event === 'CLOSED') {
-          console.warn(`Realtime connection state: ${event}`);
-          updateConnectionState('disconnected');
+          console.log('Connection logged successfully');
+        } catch (logError) {
+          console.warn('Failed to log connection:', logError);
         }
-      });
+      } else {
+        console.warn('❌ Failed to establish realtime connection');
+        updateConnectionState('disconnected');
+        
+        // Log connection failure
+        try {
+          await supabase
+            .from('realtime_connection_logs')
+            .insert({
+              status: 'disconnected',
+              client_id: CLIENT_ID,
+              error_message: 'Failed to establish connection',
+              created_at: new Date().toISOString()
+            });
+        } catch (logError) {
+          console.warn('Failed to log connection failure:', logError);
+        }
+      }
       
-      // Set a timeout to prevent hanging if connection never completes
+      // Set a timeout to verify connection status after a delay
       setTimeout(() => {
         if (connectionState === 'connecting') {
-          console.warn('Connection timeout - no state change event received');
+          console.warn('Connection timeout - still in connecting state');
           updateConnectionState('disconnected');
-          unsubscribe();
         }
       }, 10000); // 10 second timeout
     } catch (error) {
@@ -164,7 +168,6 @@ export const RealtimeManager = {
             } else {
               console.log(`🔔 ${table} table changed:`, payload.eventType);
             }
-            console.log(`🔔 ${table} table changed:`, payload.eventType);
             
             // Debounce rapid updates to reduce processing overhead
             clearTimeout(updateTimeouts.get(channelId));
