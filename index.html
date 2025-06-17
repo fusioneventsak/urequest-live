@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vite + React + TS</title>
+    <script>
+      // Apply saved colors immediately before any rendering occurs
+      (function() {
+        try {
+          const savedColors = localStorage.getItem('uiColors');
+          if (savedColors) {
+            const colors = JSON.parse(savedColors);
+            const root = document.documentElement;
+            
+            Object.entries(colors).forEach(([key, value]) => {
+              root.style.setProperty(key, value);
+            });
+            
+            console.log('Applied saved colors from localStorage before initial render');
+          }
+        } catch (e) {
+          console.error('Error applying saved colors:', e);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
