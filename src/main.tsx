@@ -1,6 +1,29 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Toaster } from 'react-hot-toast';
+
+// Apply saved colors immediately before React mounts to prevent flash of default colors
+const applyInitialColors = () => {
+  try {
+    const savedColors = localStorage.getItem('uiColors');
+    if (savedColors) {
+      const colors = JSON.parse(savedColors);
+      const root = document.documentElement;
+      
+      Object.entries(colors).forEach(([key, value]) => {
+        root.style.setProperty(key, value as string);
+      });
+      
+      console.log('Applied saved colors from localStorage');
+    }
+  } catch (e) {
+    console.error('Error applying saved colors:', e);
+  }
+};
+
+// Run immediately before any React code
+applyInitialColors();
+
 import App from './App';
 import './index.css';
 

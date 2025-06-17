@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* Default CSS variables - these will be overridden by JS before render */
+html {
   --frontend-header-bg: #13091f;
   --frontend-bg-color: #0f051d;
   --frontend-accent-color: #ff00ff;

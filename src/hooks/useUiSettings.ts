@@ -140,35 +140,32 @@ export function useUiSettings() {
   // Initial fetch and setup realtime subscription
   useEffect(() => {
     setLoading(true);
-    fetchSettings();
+    
+    // Fetch settings immediately
+    fetchSettings().catch(err => {
+      console.error('Error in initial settings fetch:', err);
+    });
 
-    const channel = supabase
-      .channel('ui_settings_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'ui_settings' },
-        () => {
-          console.log("UI settings changed, fetching updates");
-          fetchSettings();
-        }
-      )
-      .subscribe();
-
-    // Apply colors from localStorage on initial load for immediate rendering
-    const savedColors = localStorage.getItem('uiColors');
-    if (savedColors) {
-      try {
-        const colors = JSON.parse(savedColors);
-        Object.entries(colors).forEach(([key, value]) => {
-          document.documentElement.style.setProperty(key, value as string);
-        });
-      } catch (e) {
-        console.error('Error applying saved colors:', e);
-      }
-    }
-
-    // Refresh periodically
-    const refreshInterval = setInterval(fetchSettings, 30000);
+    // Set up realtime subscription for settings changes
+    const channel = supabase.channel('ui_settings_changes')
+      .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'ui_settings' },
+          () => {
+            console.log("UI settings changed, fetching updates");
+            fetchSettings().catch(err => {
+              console.error('Error fetching updated settings:', err);
+            });
+          })
+      .subscribe((status) => {
+        console.log('UI settings subscription status:', status);
+      });
+    
+    // Set up periodic refresh as a fallback
+    const refreshInterval = setInterval(() => {
+      fetchSettings().catch(err => {
+        console.error('Error in periodic settings refresh:', err);
+      });
+    }, 30000);
 
     return () => {
       clearInterval(refreshInterval);
