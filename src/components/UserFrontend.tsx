@@ -1,56 +1,25 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Music4, ThumbsUp, UserCircle } from 'lucide-react';
-import { Logo } from './shared/Logo';
-import { SongList } from './SongList';
-import { UpvoteList } from './UpvoteList';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, Music, ThumbsUp, User, AlertTriangle } from 'lucide-react';
 import { RequestModal } from './RequestModal';
-import { LandingPage } from './LandingPage';
 import { Ticker } from './Ticker';
-import { useUiSettings } from '../hooks/useUiSettings';
-import type { Song, SongRequest, User } from '../types';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
+import type { Song, SongRequest, SetList } from '../types';
 
 interface UserFrontendProps {
   songs: Song[];
   requests: SongRequest[];
-  activeSetList: {
-    id: string;
-    name: string;
-    songs: Song[];
-  } | null;
-  currentUser: User;
-  onSubmitRequest: (data: any) => Promise<boolean>;
-  onVoteRequest: (id: string) => Promise<boolean>;
-  onUpdateUser: (user: User) => void;
+  activeSetList: SetList | null;
   logoUrl: string;
-  isAdmin: boolean;
-  onLogoClick: () => void;
-  onBackendAccess: () => void;
+  onSubmitRequest: (title: string, artist: string, requesterData: { name: string; photo: string; message?: string }) => Promise<void>;
 }
 
-export function UserFrontend({
-  songs,
-  requests,
-  activeSetList,
-  currentUser,
-  onSubmitRequest,
-  onVoteRequest,
-  onUpdateUser,
-  logoUrl,
-  isAdmin,
-  onLogoClick,
-  onBackendAccess
-}: UserFrontendProps) {
+export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmitRequest }: UserFrontendProps) {
+  const [activeTab, setActiveTab] = useState<'requests' | 'upvote'>('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [activeTab, setActiveTab] = useState<'requests' | 'upvote'>('requests');
-  const { settings } = useUiSettings();
-
-  // Get colors from settings
-  const navBgColor = settings?.nav_bg_color || '#0f051d';
-  const highlightColor = settings?.highlight_color || '#ff00ff';
-  const accentColor = settings?.frontend_accent_color || '#ff00ff';
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Get the locked request for the ticker
   const lockedRequest = useMemo(() => {
@@ -84,6 +53,7 @@ export function UserFrontend({
       console.log('No active set list in UserFrontend');
     }
   }, [activeSetList]);
+  
   // Filter available songs based on search term
   const filteredSongs = useMemo(() => {
     if (!searchTerm.trim()) return availableSongs;
@@ -103,191 +73,267 @@ export function UserFrontend({
     setIsRequestModalOpen(true);
   };
 
-  const handleProfileUpdate = (updatedUser: User) => {
-    onUpdateUser(updatedUser);
-    setIsEditingProfile(false);
+  const handleRequestSubmit = async (requesterData: { name: string; photo: string; message?: string }) => {
+    if (!selectedSong) return;
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await onSubmitRequest(selectedSong.title, selectedSong.artist, requesterData);
+      setIsRequestModalOpen(false);
+      setSelectedSong(null);
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit request');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Show profile editing page when isEditingProfile is true
-  if (isEditingProfile) {
-    return (
-      <LandingPage 
-        onComplete={handleProfileUpdate}
-        initialUser={currentUser}
-      />
-    );
-  }
+  // Get pending requests sorted by votes
+  const pendingRequests = useMemo(() => {
+    return requests
+      .filter(r => r.status === 'pending' && !r.isLocked && !r.isPlayed)
+      .sort((a, b) => b.votes - a.votes);
+  }, [requests]);
 
   return (
-    <div className="frontend-container min-h-screen">
+    <div className="min-h-screen bg-darker-purple text-white">
       {/* Header */}
-      <header 
-        className="border-b border-neon-purple/20"
-        style={{ backgroundColor: navBgColor }}
-      >
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center h-12">
-            <button 
-              onClick={() => setIsEditingProfile(true)}
-              className="user-profile flex items-center group"
-              title="Edit Profile"
-            >
+      <div className="sticky top-0 z-50 bg-darker-purple/95 backdrop-blur-sm border-b border-neon-purple/20">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-4">
               <img 
-                src={currentUser.photo} 
-                alt={currentUser.name} 
-                className="w-6 h-6 rounded-full object-cover border-2 group-hover:border-opacity-100 border-opacity-75 transition-all"
-                style={{ borderColor: highlightColor }}
+                src={logoUrl} 
+                alt="Band Logo" 
+                className="h-10 w-auto rounded-lg"
                 onError={(e) => {
-                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
+                  e.currentTarget.style.display = 'none';
                 }}
               />
-              <div 
-                className="user-profile-badge opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ backgroundColor: highlightColor }}
-              >
-                <UserCircle className="w-3 h-3" />
-              </div>
-              <span 
-                className="ml-2 text-sm font-medium max-w-[120px] truncate"
-                style={{ color: highlightColor }}
-              >
-                {currentUser.name}
-              </span>
-            </button>
+              <h1 className="text-xl font-bold">Song Requests</h1>
+            </div>
+          </div>
 
-            {isAdmin && (
-              <button 
-                onClick={onBackendAccess} 
-                className="px-3 py-1 text-sm rounded-md bg-neon-purple/10 border border-neon-pink/30 hover:bg-neon-purple/20 transition-colors flex items-center space-x-1.5"
-                style={{ color: highlightColor }}
-              >
-                <Music4 className="w-4 h-4" />
-                <span>Band Hub</span>
-              </button>
+          <nav className="flex space-x-1 bg-neon-purple/10 rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
+                activeTab === 'requests'
+                  ? 'bg-neon-pink text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-neon-purple/20'
+              }`}
+            >
+              <Music className="w-4 h-4 mr-2 inline" />
+              Request Songs
+            </button>
+            <button
+              onClick={() => setActiveTab('upvote')}
+              className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
+                activeTab === 'upvote'
+                  ? 'bg-neon-pink text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-neon-purple/20'
+              }`}
+            >
+              <ThumbsUp className="w-4 h-4 mr-2 inline" />
+              Upvote
+              {pendingRequests.length > 0 && (
+                <span className="ml-2 px-2 py-1 text-xs bg-neon-pink rounded-full">
+                  {pendingRequests.length}
+                </span>
+              )}
+            </button>
+          </nav>
+        </div>
+
+        {/* Ticker */}
+        <Ticker
+          nextSong={lockedRequest ? {
+            title: lockedRequest.title,
+            artist: lockedRequest.artist,
+            albumArtUrl: lockedSong?.albumArtUrl
+          } : undefined}
+          customMessage={undefined} // You can add settings?.custom_message here
+          isActive={!!lockedRequest}
+        />
+      </div>
+
+      {/* Main content */}
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {error && (
+          <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-md p-3 flex items-start">
+            <AlertTriangle className="w-5 h-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" />
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        )}
+
+        {activeTab === 'requests' ? (
+          <div className="space-y-4">
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search songs by title, artist, or genre..."
+                className="w-full pl-10 pr-4 py-3 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+              />
+            </div>
+
+            {/* Song list */}
+            {filteredSongs.length > 0 ? (
+              <div className="space-y-3">
+                {filteredSongs.map((song) => (
+                  <div 
+                    key={song.id}
+                    onClick={() => handleSongSelect(song)}
+                    className="glass-effect rounded-lg p-4 flex items-center gap-3 transition-all duration-300 cursor-pointer hover:bg-neon-purple/20 active:bg-neon-purple/30"
+                  >
+                    <AlbumArtDisplay
+                      albumArtUrl={song.albumArtUrl}
+                      title={song.title}
+                      size="md"
+                      showAlbumArt={true} // Explicitly show album art on request page
+                      imageClassName="neon-border"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-white text-lg truncate">{song.title}</h3>
+                      <p className="text-gray-300 truncate">{song.artist}</p>
+                      {song.genre && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {song.genre.split(',').slice(0, 3).map((genre, index) => (
+                            <span
+                              key={index}
+                              className="px-2 py-1 text-xs rounded-full bg-neon-purple/20 text-gray-300"
+                            >
+                              {genre.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <Music className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                <h3 className="text-xl font-medium text-gray-400 mb-2">
+                  {searchTerm ? 'No songs found' : 'No songs available'}
+                </h3>
+                <p className="text-gray-500">
+                  {searchTerm 
+                    ? 'Try adjusting your search terms'
+                    : 'The band hasn\'t added any songs yet'
+                  }
+                </p>
+              </div>
             )}
           </div>
-        </div>
-      </header>
-
-      {/* Logo and band name */}
-      <div className="pt-12 pb-8 text-center">
-        <Logo 
-          url={logoUrl} 
-          isAdmin={isAdmin} 
-          onClick={onLogoClick}
-          className="h-32 mx-auto mb-4"
-        />
-        <h1 
-          className="text-3xl font-bold px-4"
-          style={{
-            color: accentColor,
-            textShadow: `0 0 10px ${accentColor}`,
-          }}
-        >
-          {settings?.band_name || 'Band Request Hub'}
-        </h1>
-        
-        {activeSetList && (
-          <div className="mt-2 inline-flex items-center py-1 px-4 rounded-full"
-            style={{ 
-              backgroundColor: `${accentColor}15`,
-              border: `1px solid ${accentColor}30`
-            }}
-          >
-            <span className="text-sm" style={{ color: accentColor }}>
-              Now playing songs from: <span className="font-bold">{activeSetList.name}</span>
-            </span>
+        ) : (
+          // Upvote tab
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold text-white mb-4">
+              Current Requests ({pendingRequests.length})
+            </h2>
+            
+            {pendingRequests.length > 0 ? (
+              <div className="space-y-3">
+                {pendingRequests.map((request) => {
+                  const matchingSong = songs.find(s => 
+                    s.title.toLowerCase() === request.title.toLowerCase() && 
+                    (!s.artist || !request.artist || s.artist.toLowerCase() === request.artist.toLowerCase())
+                  );
+                  
+                  return (
+                    <div 
+                      key={request.id}
+                      className="glass-effect rounded-lg p-4 flex items-center gap-3"
+                    >
+                      <AlbumArtDisplay
+                        albumArtUrl={matchingSong?.albumArtUrl}
+                        title={request.title}
+                        size="md"
+                        showAlbumArt={true} // Explicitly show album art on request page
+                        imageClassName="neon-border"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-white text-lg truncate">{request.title}</h3>
+                        <p className="text-gray-300 truncate">{request.artist}</p>
+                        <div className="flex items-center gap-4 mt-2">
+                          <span className="text-sm text-gray-400">
+                            {request.votes} {request.votes === 1 ? 'vote' : 'votes'}
+                          </span>
+                          <span className="text-sm text-gray-400">
+                            {request.requesters.length} {request.requesters.length === 1 ? 'requester' : 'requesters'}
+                          </span>
+                        </div>
+                        {request.requesters.length > 0 && (
+                          <div className="flex items-center mt-2">
+                            <div className="flex -space-x-2">
+                              {request.requesters.slice(0, 3).map((requester, index) => (
+                                <div
+                                  key={index}
+                                  className="w-6 h-6 rounded-full bg-neon-purple/20 border-2 border-darker-purple flex items-center justify-center"
+                                >
+                                  {requester.photo ? (
+                                    <img
+                                      src={requester.photo}
+                                      alt={requester.name}
+                                      className="w-full h-full rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    <User className="w-3 h-3 text-gray-400" />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            {request.requesters.length > 3 && (
+                              <span className="ml-2 text-xs text-gray-400">
+                                +{request.requesters.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        className="neon-button-sm"
+                        onClick={() => {
+                          // Handle upvote logic here
+                          console.log('Upvote request:', request.id);
+                        }}
+                      >
+                        <ThumbsUp className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <ThumbsUp className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+                <h3 className="text-xl font-medium text-gray-400 mb-2">No requests to upvote</h3>
+                <p className="text-gray-500">Be the first to request a song!</p>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Ticker */}
-      <Ticker 
-        nextSong={lockedRequest ? {
-          title: lockedRequest.title,
-          artist: lockedRequest.artist,
-          albumArtUrl: lockedSong?.albumArtUrl
-        } : undefined}
-        customMessage={settings?.custom_message}
-        isActive={!!settings?.custom_message || !!lockedRequest}
-      />
-
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto pb-24">
-        <div className="space-y-6">
-          {activeTab === 'requests' ? (
-            <>
-              {/* Search bar */}
-              <div className="relative px-4">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search songs by title, artist, or genre..."
-                  className="w-full pl-4 pr-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
-                />
-              </div>
-
-              {filteredSongs.length > 0 ? (
-                <SongList 
-                  songs={filteredSongs}
-                  onSongSelect={handleSongSelect}
-                />
-              ) : (
-                <div className="text-center p-8 text-gray-400">
-                  {searchTerm ? (
-                    <>No songs found matching "<span className='text-white'>{searchTerm}</span>"</>
-                  ) : (
-                    <>No songs available to request</>
-                  )}
-                </div>
-              )}
-            </>
-          ) : (
-            <UpvoteList 
-              requests={requests}
-              onVote={onVoteRequest}
-              currentUserId={currentUser.id || currentUser.name}
-            />
-          )}
-        </div>
-      </main>
-
-      {/* Bottom navigation */}
-      <nav 
-        className="fixed bottom-0 left-0 right-0 border-t border-neon-purple/20"
-        style={{ backgroundColor: navBgColor }}
-      >
-        <div className="max-w-7xl mx-auto px-4 flex justify-between">
-          <button
-            onClick={() => setActiveTab('requests')}
-            className="flex-1 py-4 flex flex-col items-center space-y-1"
-            style={{ color: activeTab === 'requests' ? highlightColor : 'rgb(156 163 175)' }}
-          >
-            <Music4 className="w-6 h-6" />
-            <span className="text-sm">Requests</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('upvote')}
-            className="flex-1 py-4 flex flex-col items-center space-y-1"
-            style={{ color: activeTab === 'upvote' ? highlightColor : 'rgb(156 163 175)' }}
-          >
-            <ThumbsUp className="w-6 h-6" />
-            <span className="text-sm">Upvote</span>
-          </button>
-        </div>
-      </nav>
-
       {/* Request Modal */}
-      {selectedSong && (
-        <RequestModal
-          isOpen={isRequestModalOpen}
-          onClose={() => setIsRequestModalOpen(false)}
-          song={selectedSong}
-          onSubmit={onSubmitRequest}
-          currentUser={currentUser}
-        />
-      )}
+      <RequestModal
+        isOpen={isRequestModalOpen}
+        onClose={() => {
+          setIsRequestModalOpen(false);
+          setSelectedSong(null);
+        }}
+        song={selectedSong}
+        onSubmit={handleRequestSubmit}
+        isSubmitting={isSubmitting}
+      />
     </div>
   );
 }
