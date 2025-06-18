@@ -71,9 +71,13 @@ export function KioskPage({
   const availableSongs = useMemo(() => {
     if (activeSetList && activeSetList.songs && activeSetList.songs.length > 0) {
       console.log(`Kiosk: Using songs from active set list: ${activeSetList.name} (${activeSetList.songs.length} songs)`);
+      // Debug album art in setlist songs
+      console.log('Setlist songs with album art:', activeSetList.songs.filter(s => s.albumArtUrl).length);
+      console.log('First setlist song:', activeSetList.songs[0]);
       return activeSetList.songs;
     }
     console.log(`Kiosk: No active set list, showing all ${songs.length} songs`);
+    console.log('All songs with album art:', songs.filter(s => s.albumArtUrl).length);
     return songs;
   }, [songs, activeSetList]);
 
