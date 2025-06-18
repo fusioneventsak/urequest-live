@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Plus, Save, Trash2, Music4, Check, Edit2, X, Search, Loader2, Play, AlertCircle, Filter, Tags } from 'lucide-react';
+import { Plus, Save, Trash2, Music4, Check, Edit2, X, Search, Loader2, Play, AlertCircle, Filter, Tags, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import type { Song, SetList } from '../types';
 
@@ -26,6 +26,7 @@ export function SetListManager({
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isActivating, setIsActivating] = useState<string | null>(null);
+  const [expandedSetLists, setExpandedSetLists] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     name: '',
     date: new Date().toISOString().split('T')[0],
@@ -76,6 +77,19 @@ export function SetListManager({
       setSelectedSongs(songsByGenre);
     }
   }, [songsByGenre, isCreatingByGenre]);
+
+  // Toggle set list expansion
+  const toggleSetListExpansion = useCallback((setListId: string) => {
+    setExpandedSetLists(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(setListId)) {
+        newSet.delete(setListId);
+      } else {
+        newSet.add(setListId);
+      }
+      return newSet;
+    });
+  }, []);
 
   // Manual activation method without relying on database triggers
   const handleSetActive = async (id: string) => {
@@ -662,144 +676,168 @@ export function SetListManager({
             </div>
           </div>
         ) : (
-          setLists.map((setList) => (
-            <div
-              key={setList.id}
-              className={`glass-effect rounded-lg p-4 transition-all duration-300 relative ${
-                setList.isActive ? 'set-list-active' : ''
-              }`}
-            >
-              {setList.isActive && (
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-pulse"></div>
-              )}
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h3 className="text-lg font-semibold text-white">{setList.name}</h3>
-                    <div className={`status-badge ${setList.isActive ? 'status-badge-active' : 'status-badge-inactive'}`}>
-                      <div className={`w-2 h-2 rounded-full ${setList.isActive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
-                      <span>{setList.isActive ? 'Active' : 'Inactive'}</span>
-                      {setList.isActive && (
-                        <span className="ml-2 text-xs">
-                          ({setList.songs?.length || 0} songs available)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-300">
-                    {new Date(setList.date).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleSetActive(setList.id)}
-                    className={`set-list-action ${
-                      setList.isActive
-                        ? 'set-list-action-active'
-                        : 'set-list-action-inactive'
-                    }`}
-                    disabled={isActivating === setList.id}
-                  >
-                    {isActivating === setList.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : setList.isActive ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>Active</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4" />
-                        <span>Activate</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => startEditing(setList)}
-                    className="p-2 text-neon-pink hover:bg-neon-pink/10 rounded-full"
-                    title="Edit Set List"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (setList.isActive) {
-                        alert('Cannot delete an active set list. Please deactivate it first.');
-                        return;
-                      }
-                      handleDeleteSetList(setList.id);
-                    }}
-                    className={`p-2 rounded-full ${
-                      setList.isActive
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-red-400 hover:text-red-300 hover:bg-red-400/20'
-                    }`}
-                    title={setList.isActive ? 'Cannot delete active set list' : 'Delete Set List'}
-                    disabled={setList.isActive}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {setList.notes && (
-                <p className="text-sm text-gray-300 mb-4">{setList.notes}</p>
-              )}
-              <div className="space-y-2">
-                {setList.songs && setList.songs.length > 0 ? (
-                  setList.songs.map((song, index) => (
-                    <div
-                      key={`${setList.id}-${song.id}`}
-                      className="flex items-center space-x-3 p-2 bg-neon-purple/10 rounded"
-                    >
-                      <span className="text-gray-400 text-sm">{index + 1}.</span>
-                      {song.albumArtUrl ? (
-                        <img
-                          src={song.albumArtUrl}
-                          alt={`${song.title} album art`}
-                          className="w-10 h-10 object-cover rounded-md neon-border"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const container = e.currentTarget.parentElement;
-                            if (container) {
-                              const fallback = document.createElement('div');
-                              fallback.className = "w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10";
-                              fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>';
-                              container.prepend(fallback);
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10">
-                          <Music4 className="w-5 h-5 text-neon-pink" />
-                        </div>
-                      )}
-                      <div>
-                        <span className="font-medium text-white">{song.title}</span>
-                        <p className="text-sm text-gray-300">{song.artist}</p>
-                        {song.genre && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {song.genre.split(',').map((genre, i) => (
-                              <span 
-                                key={i} 
-                                className="inline-block px-1.5 py-0.5 text-xs rounded-full bg-neon-purple/20 text-gray-300"
-                              >
-                                {genre.trim()}
-                              </span>
-                            ))}
-                          </div>
+          setLists.map((setList) => {
+            const isExpanded = expandedSetLists.has(setList.id);
+            
+            return (
+              <div
+                key={setList.id}
+                className={`glass-effect rounded-lg p-4 transition-all duration-300 relative ${
+                  setList.isActive ? 'set-list-active' : ''
+                }`}
+              >
+                {setList.isActive && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-pulse"></div>
+                )}
+                
+                {/* Always visible header with controls */}
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-semibold text-white">{setList.name}</h3>
+                      <div className={`status-badge ${setList.isActive ? 'status-badge-active' : 'status-badge-inactive'}`}>
+                        <div className={`w-2 h-2 rounded-full ${setList.isActive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
+                        <span>{setList.isActive ? 'Active' : 'Inactive'}</span>
+                        {setList.isActive && (
+                          <span className="ml-2 text-xs">
+                            ({setList.songs?.length || 0} songs available)
+                          </span>
                         )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-gray-400 text-sm italic p-2 bg-neon-purple/5 rounded">
-                    No songs in this set list
+                    <p className="text-sm text-gray-300">
+                      {new Date(setList.date).toLocaleDateString()} • {setList.songs?.length || 0} songs
+                    </p>
+                    {setList.notes && (
+                      <p className="text-sm text-gray-300 mt-1">{setList.notes}</p>
+                    )}
+                  </div>
+                  
+                  {/* Control buttons - always visible */}
+                  <div className="flex items-center space-x-2 ml-4">
+                    <button
+                      onClick={() => handleSetActive(setList.id)}
+                      className={`set-list-action ${
+                        setList.isActive
+                          ? 'set-list-action-active'
+                          : 'set-list-action-inactive'
+                      }`}
+                      disabled={isActivating === setList.id}
+                    >
+                      {isActivating === setList.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : setList.isActive ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Active</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          <span>Activate</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => startEditing(setList)}
+                      className="p-2 text-neon-pink hover:bg-neon-pink/10 rounded-full"
+                      title="Edit Set List"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (setList.isActive) {
+                          alert('Cannot delete an active set list. Please deactivate it first.');
+                          return;
+                        }
+                        handleDeleteSetList(setList.id);
+                      }}
+                      className={`p-2 rounded-full ${
+                        setList.isActive
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-red-400 hover:text-red-300 hover:bg-red-400/20'
+                      }`}
+                      title={setList.isActive ? 'Cannot delete active set list' : 'Delete Set List'}
+                      disabled={setList.isActive}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Expand/Collapse button */}
+                    <button
+                      onClick={() => toggleSetListExpansion(setList.id)}
+                      className="p-2 text-gray-400 hover:text-white hover:bg-neon-purple/10 rounded-full transition-colors"
+                      title={isExpanded ? 'Hide songs' : 'Show songs'}
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Collapsible songs section */}
+                {isExpanded && (
+                  <div className="space-y-2 transition-all duration-300">
+                    {setList.songs && setList.songs.length > 0 ? (
+                      setList.songs.map((song, index) => (
+                        <div
+                          key={`${setList.id}-${song.id}`}
+                          className="flex items-center space-x-3 p-2 bg-neon-purple/10 rounded"
+                        >
+                          <span className="text-gray-400 text-sm">{index + 1}.</span>
+                          {song.albumArtUrl ? (
+                            <img
+                              src={song.albumArtUrl}
+                              alt={`${song.title} album art`}
+                              className="w-10 h-10 object-cover rounded-md neon-border"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const container = e.currentTarget.parentElement;
+                                if (container) {
+                                  const fallback = document.createElement('div');
+                                  fallback.className = "w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10";
+                                  fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>';
+                                  container.prepend(fallback);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10">
+                              <Music4 className="w-5 h-5 text-neon-pink" />
+                            </div>
+                          )}
+                          <div>
+                            <span className="font-medium text-white">{song.title}</span>
+                            <p className="text-sm text-gray-300">{song.artist}</p>
+                            {song.genre && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {song.genre.split(',').map((genre, i) => (
+                                  <span 
+                                    key={i} 
+                                    className="inline-block px-1.5 py-0.5 text-xs rounded-full bg-neon-purple/20 text-gray-300"
+                                  >
+                                    {genre.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-gray-400 text-sm italic p-2 bg-neon-purple/5 rounded">
+                        No songs in this set list
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
