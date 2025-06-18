@@ -56,9 +56,13 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
   const availableSongs = useMemo(() => {
     if (activeSetList && activeSetList.songs && activeSetList.songs.length > 0) {
       console.log(`Using songs from active set list: ${activeSetList.name} (${activeSetList.songs.length} songs)`);
+      // Debug album art in setlist songs
+      console.log('UserFrontend setlist songs with album art:', activeSetList.songs.filter(s => s.albumArtUrl).length);
+      console.log('UserFrontend first setlist song:', activeSetList.songs[0]);
       return activeSetList.songs;
     }
     console.log(`No active set list, showing all ${songs.length} songs`);
+    console.log('UserFrontend all songs with album art:', songs.filter(s => s.albumArtUrl).length);
     return songs;
   }, [songs, activeSetList]);
 
