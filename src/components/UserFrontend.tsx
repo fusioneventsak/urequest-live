@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Music, ThumbsUp, User, AlertTriangle } from 'lucide-react';
+import { Search, Music, ThumbsUp, User, AlertTriangle, Music4 } from 'lucide-react';
 import { RequestModal } from './RequestModal';
 import { Ticker } from './Ticker';
-import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import type { Song, SongRequest, SetList } from '../types';
 
 interface UserFrontendProps {
@@ -11,15 +10,20 @@ interface UserFrontendProps {
   activeSetList: SetList | null;
   logoUrl: string;
   onSubmitRequest: (title: string, artist: string, requesterData: { name: string; photo: string; message?: string }) => Promise<void>;
+  settings?: any; // Add settings prop
 }
 
-export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmitRequest }: UserFrontendProps) {
+export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmitRequest, settings }: UserFrontendProps) {
   const [activeTab, setActiveTab] = useState<'requests' | 'upvote'>('requests');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Get colors from settings
+  const accentColor = settings?.frontend_accent_color || '#ff00ff';
+  const songBorderColor = settings?.song_border_color || settings?.frontend_accent_color || '#ff00ff';
 
   // Get the locked request for the ticker
   const lockedRequest = useMemo(() => {
@@ -117,47 +121,17 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
             </div>
           </div>
 
-          <nav className="flex space-x-1 bg-neon-purple/10 rounded-lg p-1">
-            <button
-              onClick={() => setActiveTab('requests')}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
-                activeTab === 'requests'
-                  ? 'bg-neon-pink text-white shadow-lg'
-                  : 'text-gray-300 hover:text-white hover:bg-neon-purple/20'
-              }`}
-            >
-              <Music className="w-4 h-4 mr-2 inline" />
-              Request Songs
-            </button>
-            <button
-              onClick={() => setActiveTab('upvote')}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
-                activeTab === 'upvote'
-                  ? 'bg-neon-pink text-white shadow-lg'
-                  : 'text-gray-300 hover:text-white hover:bg-neon-purple/20'
-              }`}
-            >
-              <ThumbsUp className="w-4 h-4 mr-2 inline" />
-              Upvote
-              {pendingRequests.length > 0 && (
-                <span className="ml-2 px-2 py-1 text-xs bg-neon-pink rounded-full">
-                  {pendingRequests.length}
-                </span>
-              )}
-            </button>
-          </nav>
+          {/* Ticker */}
+          <Ticker
+            nextSong={lockedRequest ? {
+              title: lockedRequest.title,
+              artist: lockedRequest.artist,
+              albumArtUrl: lockedSong?.albumArtUrl
+            } : undefined}
+            customMessage={undefined} // You can add settings?.custom_message here
+            isActive={!!lockedRequest}
+          />
         </div>
-
-        {/* Ticker */}
-        <Ticker
-          nextSong={lockedRequest ? {
-            title: lockedRequest.title,
-            artist: lockedRequest.artist,
-            albumArtUrl: lockedSong?.albumArtUrl
-          } : undefined}
-          customMessage={undefined} // You can add settings?.custom_message here
-          isActive={!!lockedRequest}
-        />
       </div>
 
       {/* Main content */}
@@ -168,6 +142,37 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
             <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
+
+        {/* Tab Navigation */}
+        <nav className="flex space-x-1 bg-neon-purple/10 rounded-lg p-1 mb-6">
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
+              activeTab === 'requests'
+                ? 'bg-neon-pink text-white shadow-lg'
+                : 'text-gray-300 hover:text-white hover:bg-neon-purple/20'
+            }`}
+          >
+            <Music className="w-4 h-4 mr-2 inline" />
+            Request Songs
+          </button>
+          <button
+            onClick={() => setActiveTab('upvote')}
+            className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
+              activeTab === 'upvote'
+                ? 'bg-neon-pink text-white shadow-lg'
+                : 'text-gray-300 hover:text-white hover:bg-neon-purple/20'
+            }`}
+          >
+            <ThumbsUp className="w-4 h-4 mr-2 inline" />
+            Upvote
+            {pendingRequests.length > 0 && (
+              <span className="ml-2 px-2 py-1 text-xs bg-neon-pink rounded-full">
+                {pendingRequests.length}
+              </span>
+            )}
+          </button>
+        </nav>
 
         {activeTab === 'requests' ? (
           <div className="space-y-4">
@@ -192,13 +197,30 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                     onClick={() => handleSongSelect(song)}
                     className="glass-effect rounded-lg p-4 flex items-center gap-3 transition-all duration-300 cursor-pointer hover:bg-neon-purple/20 active:bg-neon-purple/30"
                   >
-                    <AlbumArtDisplay
-                      albumArtUrl={song.albumArtUrl}
-                      title={song.title}
-                      size="md"
-                      showAlbumArt={true} // Explicitly show album art on request page
-                      imageClassName="neon-border"
-                    />
+                    {/* Direct image like in upvote section */}
+                    <div className="w-16 h-16 flex-shrink-0 relative">
+                      {song.albumArtUrl ? (
+                        <img
+                          src={song.albumArtUrl}
+                          alt={`${song.title} album art`}
+                          className="w-16 h-16 object-cover rounded-md neon-border"
+                          onError={(e) => {
+                            // Fallback to music icon if image fails to load
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextElementSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0"
+                        style={{ 
+                          display: song.albumArtUrl ? 'none' : 'flex',
+                          boxShadow: `0 0 10px ${accentColor}30`
+                        }}
+                      >
+                        <Music4 className="w-8 h-8" style={{ color: accentColor }} />
+                      </div>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-white text-lg truncate">{song.title}</h3>
                       <p className="text-gray-300 truncate">{song.artist}</p>
@@ -253,13 +275,30 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                       key={request.id}
                       className="glass-effect rounded-lg p-4 flex items-center gap-3"
                     >
-                      <AlbumArtDisplay
-                        albumArtUrl={matchingSong?.albumArtUrl}
-                        title={request.title}
-                        size="md"
-                        showAlbumArt={true} // Explicitly show album art on request page
-                        imageClassName="neon-border"
-                      />
+                      {/* Direct image like in working upvote section */}
+                      <div className="w-16 h-16 flex-shrink-0 relative">
+                        {matchingSong?.albumArtUrl ? (
+                          <img
+                            src={matchingSong.albumArtUrl}
+                            alt={`${request.title} album art`}
+                            className="w-16 h-16 object-cover rounded-md neon-border"
+                            onError={(e) => {
+                              // Fallback to music icon if image fails to load
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0"
+                          style={{ 
+                            display: matchingSong?.albumArtUrl ? 'none' : 'flex',
+                            boxShadow: `0 0 10px ${accentColor}30`
+                          }}
+                        >
+                          <Music4 className="w-8 h-8" style={{ color: accentColor }} />
+                        </div>
+                      </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-white text-lg truncate">{request.title}</h3>
                         <p className="text-gray-300 truncate">{request.artist}</p>
