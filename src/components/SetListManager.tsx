@@ -84,12 +84,16 @@ export function SetListManager({
   }, [songs, songsByGenre, searchTerm, isCreatingByGenre]);
 
   const toggleSongSelection = useCallback((song: Song) => {
+    console.log('Toggling song selection:', song.title, 'Has album art:', !!song.albumArtUrl);
     setSelectedSongs(prev => {
       const isSelected = prev.find(s => s.id === song.id);
       if (isSelected) {
         return prev.filter(s => s.id !== song.id);
       } else {
-        return [...prev, song];
+        // Make sure we preserve the full song object including albumArtUrl
+        const fullSong = { ...song };
+        console.log('Adding song to selection:', fullSong.title, 'Album art:', fullSong.albumArtUrl);
+        return [...prev, fullSong];
       }
     });
   }, []);
@@ -121,6 +125,10 @@ export function SetListManager({
   }, []);
 
   const startEdit = useCallback((setList: SetList) => {
+    console.log('Starting to edit setlist:', setList.name);
+    console.log('Setlist songs with album art:', setList.songs?.filter(s => s.albumArtUrl).length, '/', setList.songs?.length);
+    console.log('First setlist song:', setList.songs?.[0]);
+    
     setEditingSetList(setList);
     setSelectedSongs(setList.songs || []);
     setFormData({
