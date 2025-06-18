@@ -336,9 +336,19 @@ export function SetListManager({
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      {/* Music icon instead of album art for setlist manager */}
-                      <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
-                        <Music4 className="w-6 h-6 text-neon-pink" />
+                      {/* Direct img like the working kiosk/user frontend */}
+                      <div className="w-12 h-12 flex-shrink-0 relative">
+                        {song.albumArtUrl ? (
+                          <img
+                            src={song.albumArtUrl}
+                            alt={`${song.title} album art`}
+                            className="w-12 h-12 object-cover rounded-md neon-border"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                            <Music4 className="w-6 h-6 text-neon-pink" />
+                          </div>
+                        )}
                       </div>
                       <div>
                         <p className="font-medium text-white">{song.title}</p>
@@ -382,9 +392,19 @@ export function SetListManager({
                   >
                     <div className="flex items-center space-x-3">
                       <span className="text-gray-400 text-sm">{index + 1}.</span>
-                      {/* Music icon instead of album art for setlist manager */}
-                      <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
-                        <Music4 className="w-6 h-6 text-neon-pink" />
+                      {/* Direct img like the working kiosk/user frontend */}
+                      <div className="w-12 h-12 flex-shrink-0 relative">
+                        {song.albumArtUrl ? (
+                          <img
+                            src={song.albumArtUrl}
+                            alt={`${song.title} album art`}
+                            className="w-12 h-12 object-cover rounded-md neon-border"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                            <Music4 className="w-6 h-6 text-neon-pink" />
+                          </div>
+                        )}
                       </div>
                       <div>
                         <span className="font-medium text-white">{song.title}</span>
@@ -545,9 +565,19 @@ export function SetListManager({
                           className="flex items-center space-x-3 p-2 bg-neon-purple/10 rounded"
                         >
                           <span className="text-gray-400 text-sm">{index + 1}.</span>
-                          {/* Music icon instead of album art for setlist manager */}
-                          <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
-                            <Music4 className="w-6 h-6 text-neon-pink" />
+                          {/* Direct img like the working kiosk/user frontend */}
+                          <div className="w-12 h-12 flex-shrink-0 relative">
+                            {song.albumArtUrl ? (
+                              <img
+                                src={song.albumArtUrl}
+                                alt={`${song.title} album art`}
+                                className="w-12 h-12 object-cover rounded-md neon-border"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                                <Music4 className="w-6 h-6 text-neon-pink" />
+                              </div>
+                            )}
                           </div>
                           <div>
                             <span className="font-medium text-white">{song.title}</span>
