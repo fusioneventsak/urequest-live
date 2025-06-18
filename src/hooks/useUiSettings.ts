@@ -45,11 +45,11 @@ export function useUiSettings() {
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Function to apply CSS variables
+  // Function to apply CSS variables instantly
   const applyCssVariables = useCallback((newSettings: UiSettings) => {
     const root = document.documentElement;
     
-    // Apply all color settings immediately
+    // Apply all color settings immediately with !important for instant override
     const colors = {
       '--frontend-bg-color': newSettings.frontend_bg_color || DEFAULT_SETTINGS.frontend_bg_color,
       '--frontend-accent-color': newSettings.frontend_accent_color || DEFAULT_SETTINGS.frontend_accent_color,
@@ -60,12 +60,20 @@ export function useUiSettings() {
       '--neon-purple': newSettings.secondary_color || DEFAULT_SETTINGS.secondary_color
     };
 
+    // Apply colors with priority and force re-render
     Object.entries(colors).forEach(([key, value]) => {
-      root.style.setProperty(key, value);
+      root.style.setProperty(key, value, 'important');
     });
 
-    // Also save to localStorage for immediate persistence
+    // Save to localStorage immediately for instant loading on next visit
     localStorage.setItem('uiColors', JSON.stringify(colors));
+    
+    // Force a style recalculation
+    document.body.style.display = 'none';
+    document.body.offsetHeight; // Trigger reflow
+    document.body.style.display = '';
+    
+    console.log('Applied colors instantly:', colors);
   }, []);
 
   // Function to force a refresh of the settings
@@ -107,7 +115,7 @@ export function useUiSettings() {
         ...settingsToUse
       };
 
-      // Apply CSS variables immediately
+      // Apply CSS variables immediately for instant color change
       applyCssVariables(settingsToUse);
       
       setSettings(settingsToUse);
@@ -126,7 +134,7 @@ export function useUiSettings() {
         try {
           const colors = JSON.parse(savedColors);
           Object.entries(colors).forEach(([key, value]) => {
-            document.documentElement.style.setProperty(key, value as string);
+            document.documentElement.style.setProperty(key, value as string, 'important');
           });
         } catch (e) {
           console.error('Error applying saved colors:', e);
@@ -136,6 +144,24 @@ export function useUiSettings() {
       setLoading(false);
     }
   }, [applyCssVariables]);
+
+  // Load colors from localStorage immediately on hook initialization
+  useEffect(() => {
+    // Apply saved colors immediately before any database fetch
+    try {
+      const savedColors = localStorage.getItem('uiColors');
+      if (savedColors) {
+        const colors = JSON.parse(savedColors);
+        const root = document.documentElement;
+        Object.entries(colors).forEach(([key, value]) => {
+          root.style.setProperty(key, value as string, 'important');
+        });
+        console.log('Applied saved colors from localStorage immediately');
+      }
+    } catch (e) {
+      console.warn('Error loading colors from localStorage:', e);
+    }
+  }, []); // Run only once on mount
 
   // Initial fetch and setup realtime subscription
   useEffect(() => {
@@ -203,7 +229,7 @@ export function useUiSettings() {
         if (updateError) throw updateError;
       }
 
-      // Apply CSS variables immediately for instant feedback
+      // Apply CSS variables immediately for instant feedback - NO DELAY
       if (newSettings.frontend_bg_color || 
           newSettings.frontend_accent_color || 
           newSettings.frontend_header_bg || 
@@ -215,36 +241,37 @@ export function useUiSettings() {
         const root = document.documentElement;
         const colors: Record<string, string> = {};
         
+        // Apply each color immediately
         if (newSettings.frontend_bg_color) {
-          root.style.setProperty('--frontend-bg-color', newSettings.frontend_bg_color);
+          root.style.setProperty('--frontend-bg-color', newSettings.frontend_bg_color, 'important');
           colors['--frontend-bg-color'] = newSettings.frontend_bg_color;
         }
         if (newSettings.frontend_accent_color) {
-          root.style.setProperty('--frontend-accent-color', newSettings.frontend_accent_color);
+          root.style.setProperty('--frontend-accent-color', newSettings.frontend_accent_color, 'important');
           colors['--frontend-accent-color'] = newSettings.frontend_accent_color;
         }
         if (newSettings.frontend_header_bg) {
-          root.style.setProperty('--frontend-header-bg', newSettings.frontend_header_bg);
+          root.style.setProperty('--frontend-header-bg', newSettings.frontend_header_bg, 'important');
           colors['--frontend-header-bg'] = newSettings.frontend_header_bg;
         }
         if (newSettings.frontend_secondary_accent) {
-          root.style.setProperty('--frontend-secondary-accent', newSettings.frontend_secondary_accent);
+          root.style.setProperty('--frontend-secondary-accent', newSettings.frontend_secondary_accent, 'important');
           colors['--frontend-secondary-accent'] = newSettings.frontend_secondary_accent;
         }
         if (newSettings.song_border_color) {
-          root.style.setProperty('--song-border-color', newSettings.song_border_color);
+          root.style.setProperty('--song-border-color', newSettings.song_border_color, 'important');
           colors['--song-border-color'] = newSettings.song_border_color;
         }
         if (newSettings.primary_color) {
-          root.style.setProperty('--neon-pink', newSettings.primary_color);
+          root.style.setProperty('--neon-pink', newSettings.primary_color, 'important');
           colors['--neon-pink'] = newSettings.primary_color;
         }
         if (newSettings.secondary_color) {
-          root.style.setProperty('--neon-purple', newSettings.secondary_color);
+          root.style.setProperty('--neon-purple', newSettings.secondary_color, 'important');
           colors['--neon-purple'] = newSettings.secondary_color;
         }
         
-        // Update localStorage with new colors
+        // Update localStorage immediately
         const savedColors = localStorage.getItem('uiColors');
         if (savedColors) {
           try {
@@ -259,6 +286,8 @@ export function useUiSettings() {
         } else {
           localStorage.setItem('uiColors', JSON.stringify(colors));
         }
+        
+        console.log('Applied colors instantly on update:', colors);
       }
 
       // Force refresh to ensure all components update
