@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Plus, Save, Trash2, Music4, Check, Edit2, X, Search, Loader2, Play, AlertCircle, Filter, Tags, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import type { Song, SetList } from '../types';
 
 interface SetListManagerProps {
@@ -35,7 +36,6 @@ export function SetListManager({
   const [isCreatingByGenre, setIsCreatingByGenre] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
 
-  // Extract all unique genres from songs
   const availableGenres = useMemo(() => {
     const genreSet = new Set<string>();
     
@@ -50,7 +50,6 @@ export function SetListManager({
     return Array.from(genreSet).sort();
   }, [songs]);
 
-  // Filter songs by selected genres
   const songsByGenre = useMemo(() => {
     if (selectedGenres.length === 0) return [];
     
@@ -62,7 +61,6 @@ export function SetListManager({
     });
   }, [songs, selectedGenres]);
 
-  // Handle genre selection/deselection
   const toggleGenreSelection = useCallback((genre: string) => {
     setSelectedGenres(prev => 
       prev.includes(genre)
@@ -71,14 +69,12 @@ export function SetListManager({
     );
   }, []);
 
-  // Auto-select songs when genres are selected in genre creation mode
   useEffect(() => {
     if (isCreatingByGenre) {
       setSelectedSongs(songsByGenre);
     }
   }, [songsByGenre, isCreatingByGenre]);
 
-  // Toggle set list expansion
   const toggleSetListExpansion = useCallback((setListId: string) => {
     setExpandedSetLists(prev => {
       const newSet = new Set(prev);
@@ -91,14 +87,12 @@ export function SetListManager({
     });
   }, []);
 
-  // Manual activation method without relying on database triggers
   const handleSetActive = async (id: string) => {
     if (isActivating || !id) return;
     setIsActivating(id);
     
     try {
       console.log(`Setting set list ${id} active state...`);
-      // Use the external activation handler
       await onSetActive(id);
       console.log(`Set list ${id} activation state updated successfully`);
     } catch (error) {
@@ -112,7 +106,6 @@ export function SetListManager({
     e.preventDefault();
     if (isSaving) return;
     
-    // Validate required fields
     if (!formData.name || !formData.date) {
       alert('Set list name and date are required');
       return;
@@ -130,7 +123,6 @@ export function SetListManager({
       if (editingSetList) {
         console.log('Updating existing set list:', editingSetList.id);
         
-        // Update the set list with the edited data
         await onUpdateSetList({
           ...editingSetList,
           name: formData.name,
@@ -141,12 +133,10 @@ export function SetListManager({
         
         console.log('Set list updated successfully');
       } else {
-        // Create new set list
         console.log('Creating new set list...');
         
         let setListName = formData.name;
         
-        // If creating by genre, add genre info to name if not specified
         if (isCreatingByGenre && selectedGenres.length > 0 && !setListName.includes('Genre')) {
           const genreText = selectedGenres.length > 1 
             ? `${selectedGenres.length} Genres` 
@@ -155,7 +145,6 @@ export function SetListManager({
           setListName = setListName || `${genreText} Set`;
         }
         
-        // Create the set list object with proper snake_case fields for database
         await onCreateSetList({
           name: setListName,
           date: formData.date,
@@ -169,7 +158,6 @@ export function SetListManager({
         console.log('Set list created successfully');
       }
 
-      // Reset form
       resetForm();
     } catch (error) {
       console.error('Error saving set list:', error);
@@ -247,7 +235,6 @@ export function SetListManager({
   }, []);
 
   const filteredSongs = useMemo(() => {
-    // When creating by genre and genres are selected, we show songs by genre
     if (isCreatingByGenre && selectedGenres.length > 0) {
       return songsByGenre.filter(
         song =>
@@ -256,7 +243,6 @@ export function SetListManager({
       );
     }
     
-    // Regular song filtering
     return songs.filter(
       song =>
         song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -422,27 +408,12 @@ export function SetListManager({
                           className="flex items-center justify-between p-2 bg-neon-purple/10 rounded"
                         >
                           <div className="flex items-center space-x-3">
-                            {song.albumArtUrl ? (
-                              <img
-                                src={song.albumArtUrl}
-                                alt={`${song.title} album art`}
-                                className="w-10 h-10 object-cover rounded-md neon-border"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const container = e.currentTarget.parentElement;
-                                  if (container) {
-                                    const fallback = document.createElement('div');
-                                    fallback.className = "w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10";
-                                    fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>';
-                                    container.prepend(fallback);
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10">
-                                <Music4 className="w-5 h-5 text-neon-pink" />
-                              </div>
-                            )}
+                            <AlbumArtDisplay
+                              albumArtUrl={song.albumArtUrl}
+                              title={song.title}
+                              size="sm"
+                              imageClassName="neon-border"
+                            />
                             <div>
                               <span className="font-medium text-white">{song.title}</span>
                               <p className="text-sm text-gray-300">{song.artist}</p>
@@ -516,27 +487,12 @@ export function SetListManager({
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      {song.albumArtUrl ? (
-                        <img
-                          src={song.albumArtUrl}
-                          alt={`${song.title} album art`}
-                          className="w-12 h-12 object-cover rounded-md neon-border"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const container = e.currentTarget.parentElement;
-                            if (container) {
-                              const fallback = document.createElement('div');
-                              fallback.className = "w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/10";
-                              fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>';
-                              container.prepend(fallback);
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/10">
-                          <Music4 className="w-6 h-6 text-neon-pink" />
-                        </div>
-                      )}
+                      <AlbumArtDisplay
+                        albumArtUrl={song.albumArtUrl}
+                        title={song.title}
+                        size="sm"
+                        imageClassName="neon-border"
+                      />
                       <div>
                         <p className="font-medium text-white">{song.title}</p>
                         <p className="text-sm text-gray-300">{song.artist}</p>
@@ -579,27 +535,12 @@ export function SetListManager({
                   >
                     <div className="flex items-center space-x-3">
                       <span className="text-gray-400 text-sm">{index + 1}.</span>
-                      {song.albumArtUrl ? (
-                        <img
-                          src={song.albumArtUrl}
-                          alt={`${song.title} album art`}
-                          className="w-10 h-10 object-cover rounded-md neon-border"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const container = e.currentTarget.parentElement;
-                            if (container) {
-                              const fallback = document.createElement('div');
-                              fallback.className = "w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10";
-                              fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>';
-                              container.prepend(fallback);
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10">
-                          <Music4 className="w-5 h-5 text-neon-pink" />
-                        </div>
-                      )}
+                      <AlbumArtDisplay
+                        albumArtUrl={song.albumArtUrl}
+                        title={song.title}
+                        size="sm"
+                        imageClassName="neon-border"
+                      />
                       <div>
                         <span className="font-medium text-white">{song.title}</span>
                         <p className="text-sm text-gray-300">{song.artist}</p>
@@ -690,7 +631,6 @@ export function SetListManager({
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-pulse"></div>
                 )}
                 
-                {/* Always visible header with controls */}
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
@@ -713,7 +653,6 @@ export function SetListManager({
                     )}
                   </div>
                   
-                  {/* Control buttons - always visible */}
                   <div className="flex items-center space-x-2 ml-4">
                     <button
                       onClick={() => handleSetActive(setList.id)}
@@ -764,7 +703,6 @@ export function SetListManager({
                       <Trash2 className="w-4 h-4" />
                     </button>
                     
-                    {/* Expand/Collapse button */}
                     <button
                       onClick={() => toggleSetListExpansion(setList.id)}
                       className="p-2 text-gray-400 hover:text-white hover:bg-neon-purple/10 rounded-full transition-colors"
@@ -779,7 +717,6 @@ export function SetListManager({
                   </div>
                 </div>
 
-                {/* Collapsible songs section */}
                 {isExpanded && (
                   <div className="space-y-2 transition-all duration-300">
                     {setList.songs && setList.songs.length > 0 ? (
@@ -789,27 +726,12 @@ export function SetListManager({
                           className="flex items-center space-x-3 p-2 bg-neon-purple/10 rounded"
                         >
                           <span className="text-gray-400 text-sm">{index + 1}.</span>
-                          {song.albumArtUrl ? (
-                            <img
-                              src={song.albumArtUrl}
-                              alt={`${song.title} album art`}
-                              className="w-10 h-10 object-cover rounded-md neon-border"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                const container = e.currentTarget.parentElement;
-                                if (container) {
-                                  const fallback = document.createElement('div');
-                                  fallback.className = "w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10";
-                                  fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ff00ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>';
-                                  container.prepend(fallback);
-                                }
-                              }}
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-md flex items-center justify-center bg-neon-purple/10">
-                              <Music4 className="w-5 h-5 text-neon-pink" />
-                            </div>
-                          )}
+                          <AlbumArtDisplay
+                            albumArtUrl={song.albumArtUrl}
+                            title={song.title}
+                            size="sm"
+                            imageClassName="neon-border"
+                          />
                           <div>
                             <span className="font-medium text-white">{song.title}</span>
                             <p className="text-sm text-gray-300">{song.artist}</p>

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Save, X, Music4, Upload, Loader2, Filter, Tag } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Upload, Loader2, Filter, Tag } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { searchITunes } from '../utils/itunes';
 import { SongEditorModal } from './SongEditorModal';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import type { Song } from '../types';
 
 interface SongLibraryProps {
@@ -493,21 +494,12 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
                 <tr key={song.id} className="hover:bg-neon-purple/10">
                   <td className="px-6 py-4 text-sm text-gray-300">{index + 1}</td>
                   <td className="px-6 py-4">
-                    {song.albumArtUrl ? (
-                      <img
-                        src={song.albumArtUrl}
-                        alt={`${song.title} album art`}
-                        className="w-12 h-12 object-cover rounded-md neon-border"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.parentElement?.classList.add('fallback-icon');
-                        }}
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/10">
-                        <Music4 className="w-6 h-6 text-neon-pink" />
-                      </div>
-                    )}
+                    <AlbumArtDisplay
+                      albumArtUrl={song.albumArtUrl}
+                      title={song.title}
+                      size="sm"
+                      imageClassName="neon-border"
+                    />
                   </td>
                   <td className="px-6 py-4 text-sm text-white">{song.title}</td>
                   <td className="px-6 py-4 text-sm text-white">{song.artist}</td>

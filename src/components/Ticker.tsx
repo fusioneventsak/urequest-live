@@ -1,6 +1,7 @@
 import React from 'react';
-import { Music, Volume2 } from 'lucide-react';
+import { Volume2 } from 'lucide-react';
 import { useUiSettings } from '../hooks/useUiSettings';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 
 interface TickerProps {
   nextSong?: {
@@ -185,27 +186,15 @@ export function Ticker({ nextSong, customMessage, isActive = true }: TickerProps
             <div className="flex items-center space-x-4">
               {/* Album Art with better sizing */}
               <div className="flex-shrink-0">
-                {nextSong.albumArtUrl ? (
-                  <img
-                    src={nextSong.albumArtUrl}
-                    alt="Album art"
-                    className="w-14 h-14 rounded-lg object-cover"
-                    style={{ 
-                      boxShadow: `0 4px 20px ${accentColor}40`,
-                      border: `2px solid ${accentColor}`
-                    }}
-                  />
-                ) : (
-                  <div 
-                    className="w-14 h-14 rounded-lg flex items-center justify-center"
-                    style={{ 
-                      background: `linear-gradient(135deg, ${accentColor}20, ${secondaryColor}20)`,
-                      border: `2px solid ${accentColor}`
-                    }}
-                  >
-                    <Music className="w-6 h-6" style={{ color: accentColor }} />
-                  </div>
-                )}
+                <AlbumArtDisplay
+                  albumArtUrl={nextSong.albumArtUrl}
+                  title={nextSong.title}
+                  size="xs"
+                  imageStyle={{
+                    boxShadow: `0 4px 20px ${accentColor}40`,
+                    border: `2px solid ${accentColor}`
+                  }}
+                />
               </div>
 
               {/* Song Info - Better mobile sizing */}
