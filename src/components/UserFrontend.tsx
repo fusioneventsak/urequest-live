@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Music, ThumbsUp, User, AlertTriangle, Music4, Send } from 'lucide-react';
 import { useUiSettings } from '../hooks/useUiSettings';
 import { Logo } from './shared/Logo';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import { Ticker } from './Ticker';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import type { Song, SongRequest, SetList } from '../types';
@@ -12,59 +13,6 @@ interface UserFrontendProps {
   activeSetList: SetList | null;
   logoUrl: string;
   onSubmitRequest: (title: string, artist: string, requesterData: { name: string; photo: string; message?: string }) => Promise<void>;
-}
-
-// Album Art Component that actually works
-function WorkingAlbumArt({ albumArtUrl, title, size = 'md', style = {} }: { 
-  albumArtUrl?: string; 
-  title: string; 
-  size?: 'sm' | 'md' | 'lg';
-  style?: React.CSSProperties;
-}) {
-  const [imageError, setImageError] = useState(false);
-  const { settings } = useUiSettings();
-  const accentColor = settings?.frontend_accent_color || '#ff00ff';
-
-  const sizes = {
-    sm: 'w-12 h-12',
-    md: 'w-16 h-16', 
-    lg: 'w-20 h-20'
-  };
-
-  const iconSizes = {
-    sm: 'w-6 h-6',
-    md: 'w-8 h-8',
-    lg: 'w-10 h-10'
-  };
-
-  // Reset error state when URL changes
-  useEffect(() => {
-    setImageError(false);
-  }, [albumArtUrl]);
-
-  if (!albumArtUrl || imageError) {
-    return (
-      <div 
-        className={`${sizes[size]} rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0`}
-        style={{
-          boxShadow: `0 0 10px ${accentColor}30`,
-          ...style
-        }}
-      >
-        <Music4 className={iconSizes[size]} style={{ color: accentColor }} />
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={albumArtUrl}
-      alt={`${title} album art`}
-      className={`${sizes[size]} object-cover rounded-md flex-shrink-0`}
-      style={style}
-      onError={() => setImageError(true)}
-    />
-  );
 }
 
 export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmitRequest }: UserFrontendProps) {
@@ -283,11 +231,11 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                       boxShadow: `0 0 8px ${songBorderColor}30`,
                     }}
                   >
-                    <WorkingAlbumArt
+                    <AlbumArtDisplay
                       albumArtUrl={song.albumArtUrl}
                       title={song.title}
                       size="md"
-                      style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
+                      imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
                     />
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
@@ -362,7 +310,7 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                         boxShadow: `0 0 8px ${songBorderColor}50`,
                       }}
                     >
-                      <WorkingAlbumArt
+                      <AlbumArtDisplay
                         albumArtUrl={matchingSong?.albumArtUrl}
                         title={request.title}
                         size="md"
@@ -474,11 +422,11 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
               <h2 className="text-xl font-bold text-white mb-4">Request Song</h2>
 
               <div className="flex items-start space-x-4 mb-6">
-                <WorkingAlbumArt
+                <AlbumArtDisplay
                   albumArtUrl={selectedSong.albumArtUrl}
                   title={selectedSong.title}
                   size="lg"
-                  style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
+                  imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
                 />
                 <div>
                   <h3 className="font-medium text-white text-lg">{selectedSong.title}</h3>
