@@ -68,7 +68,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         }
       }
 
-      // Fetch set lists with songs - only basic columns that exist
+      // Fetch set lists with songs - INCLUDING album_art_url for album art display
       console.log('Fetching set lists with songs...');
       const { data: setListsData, error: setListsError } = await supabase
         .from('set_lists')
@@ -88,7 +88,8 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
               artist,
               genre,
               key,
-              notes
+              notes,
+              album_art_url
             )
           )
         `)
@@ -109,6 +110,8 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
             .sort((a: any, b: any) => a.position - b.position)
             .map((sls: any) => ({
               ...sls.songs,
+              // Explicitly map album_art_url to albumArtUrl for TypeScript consistency
+              albumArtUrl: sls.songs.album_art_url,
               position: sls.position,
               setListSongId: sls.id
             }))
@@ -118,9 +121,14 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         const activeSetList = formattedSetLists.find(sl => sl.isActive);
         if (activeSetList) {
           console.log(`Active set list found: ${activeSetList.name} (${activeSetList.id})`);
+          console.log(`Active setlist songs with album art: ${activeSetList.songs?.filter(s => s.albumArtUrl).length}/${activeSetList.songs?.length}`);
+          if (activeSetList.songs?.length > 0) {
+            console.log('First active setlist song:', activeSetList.songs[0]);
+          }
         } else {
           console.log('No active set list found');
         }
+        
         cacheService.setSetLists(SET_LISTS_CACHE_KEY, formattedSetLists);
         onUpdate(formattedSetLists);
         setRetryCount(0); // Reset retry count on success
