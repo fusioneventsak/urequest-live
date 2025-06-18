@@ -145,7 +145,7 @@ export function useUiSettings() {
     }
   }, [applyCssVariables]);
 
-  // Load colors from localStorage immediately on hook initialization
+  // Apply saved colors immediately on first load and setup effects
   useEffect(() => {
     // Apply saved colors immediately before any database fetch
     try {
@@ -161,10 +161,8 @@ export function useUiSettings() {
     } catch (e) {
       console.warn('Error loading colors from localStorage:', e);
     }
-  }, []); // Run only once on mount
 
-  // Initial fetch and setup realtime subscription
-  useEffect(() => {
+    // Start loading settings
     setLoading(true);
     
     // Fetch settings immediately
@@ -197,7 +195,7 @@ export function useUiSettings() {
       clearInterval(refreshInterval);
       supabase.removeChannel(channel);
     };
-  }, [fetchSettings]);
+  }, [fetchSettings]); // Only depend on fetchSettings
 
   const updateSettings = async (newSettings: Partial<UiSettings>) => {
     try {
