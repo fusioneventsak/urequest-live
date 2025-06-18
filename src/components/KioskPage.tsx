@@ -382,20 +382,21 @@ export function KioskPage({
                       boxShadow: `0 0 8px ${songBorderColor}30`,
                     }}
                   >
-                    {/* Temporary test with direct img */}
-                    {song.albumArtUrl ? (
-                      <img
-                        src={song.albumArtUrl}
-                        alt={`${song.title} album art`}
-                        className="w-16 h-16 object-cover rounded-md flex-shrink-0"
-                        style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
-                        onError={(e) => console.log('Direct img failed:', song.albumArtUrl)}
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
-                        <Music4 className="w-8 h-8" style={{ color: accentColor }} />
-                      </div>
-                    )}
+                    {/* Direct img like the working upvote section */}
+                    <div className="w-16 h-16 flex-shrink-0 relative">
+                      {song.albumArtUrl ? (
+                        <img
+                          src={song.albumArtUrl}
+                          alt={`${song.title} album art`}
+                          className="w-16 h-16 object-cover rounded-md"
+                          style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                          <Music4 className="w-8 h-8" style={{ color: accentColor }} />
+                        </div>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
                       <p className="text-gray-300 text-base truncate">{song.artist}</p>
