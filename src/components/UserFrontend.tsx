@@ -10,9 +10,19 @@ import type { Song, SongRequest, SetList } from '../types';
 interface UserFrontendProps {
   songs: Song[];
   requests: SongRequest[];
-  activeSetList: SetList | null;
+  activeSetList: {
+    id: string;
+    name: string;
+    songs: Song[];
+  } | null;
+  currentUser: { id?: string; name: string; photo: string };
+  onSubmitRequest: (data: any) => Promise<boolean>;
+  onVoteRequest: (id: string) => Promise<boolean>;
+  onUpdateUser: (user: { name: string; photo: string }) => void;
   logoUrl: string;
-  onSubmitRequest: (title: string, artist: string, requesterData: { name: string; photo: string; message?: string }) => Promise<void>;
+  isAdmin: boolean;
+  onLogoClick: () => void;
+  onBackendAccess: () => void;
 }
 
 export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmitRequest }: UserFrontendProps) {
@@ -396,9 +406,7 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                           backgroundColor: accentColor,
                           border: `1px solid ${accentColor}`,
                         }}
-                        onClick={() => {
-                          console.log('Upvote request:', request.id);
-                        }}
+                        onClick={() => onVoteRequest(request.id)}
                       >
                         <ThumbsUp className="w-3 h-3" />
                         <span>UPVOTE</span>
