@@ -471,7 +471,7 @@ export function SetListManager({
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    {!setList.isActive && (
+                    {!setList.isActive ? (
                       <button
                         onClick={() => handleSetActive(setList.id)}
                         disabled={isActivatingThis}
@@ -484,6 +484,21 @@ export function SetListManager({
                           </>
                         ) : (
                           'Set Active'
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleSetActive(setList.id)}
+                        disabled={isActivatingThis}
+                        className="px-3 py-1 text-sm rounded-md bg-red-500/20 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                      >
+                        {isActivatingThis ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
+                            Deactivating...
+                          </>
+                        ) : (
+                          'Deactivate'
                         )}
                       </button>
                     )}
