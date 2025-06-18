@@ -367,31 +367,12 @@ export function KioskPage({
                       boxShadow: `0 0 8px ${songBorderColor}30`,
                     }}
                   >
-                    {/* Direct image like in upvote section */}
-                    <div className="w-16 h-16 flex-shrink-0 relative">
-                      {song.albumArtUrl ? (
-                        <img
-                          src={song.albumArtUrl}
-                          alt={`${song.title} album art`}
-                          className="w-16 h-16 object-cover rounded-md"
-                          style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
-                          onError={(e) => {
-                            // Fallback to music icon if image fails to load
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.nextElementSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <div 
-                        className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0"
-                        style={{ 
-                          display: song.albumArtUrl ? 'none' : 'flex',
-                          boxShadow: `0 0 10px ${accentColor}30`
-                        }}
-                      >
-                        <Music4 className="w-8 h-8" style={{ color: accentColor }} />
-                      </div>
-                    </div>
+                    <WorkingAlbumArt
+                      albumArtUrl={song.albumArtUrl}
+                      title={song.title}
+                      size="md"
+                      style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
+                    />
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
                       <p className="text-gray-300 text-base truncate">{song.artist}</p>
@@ -583,31 +564,12 @@ export function KioskPage({
               <h2 className="text-xl font-bold text-white mb-4">Request Song</h2>
 
               <div className="flex items-start space-x-4 mb-6">
-                {/* Direct image like in upvote section */}
-                <div className="w-20 h-20 flex-shrink-0 relative">
-                  {selectedSong.albumArtUrl ? (
-                    <img
-                      src={selectedSong.albumArtUrl}
-                      alt={`${selectedSong.title} album art`}
-                      className="w-20 h-20 object-cover rounded-md"
-                      style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
-                      onError={(e) => {
-                        // Fallback to music icon if image fails to load
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextElementSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  <div 
-                    className="w-20 h-20 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0"
-                    style={{ 
-                      display: selectedSong.albumArtUrl ? 'none' : 'flex',
-                      boxShadow: `0 0 10px ${accentColor}30`
-                    }}
-                  >
-                    <Music4 className="w-10 h-10" style={{ color: accentColor }} />
-                  </div>
-                </div>
+                <WorkingAlbumArt
+                  albumArtUrl={selectedSong.albumArtUrl}
+                  title={selectedSong.title}
+                  size="lg"
+                  style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
+                />
                 <div>
                   <h3 className="font-medium text-white text-lg">{selectedSong.title}</h3>
                   <p className="text-gray-300 text-base">{selectedSong.artist || 'Unknown Artist'}</p>
