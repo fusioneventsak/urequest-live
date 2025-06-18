@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Music4, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle } from 'lucide-react';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import type { Song, User } from '../types';
 import { usePhotoStorage } from '../hooks/usePhotoStorage';
 
@@ -107,23 +108,12 @@ export function RequestModal({
         )}
 
         <div className="flex items-start space-x-4 mb-6">
-          {song.albumArtUrl ? (
-            <img 
-              src={song.albumArtUrl} 
-              alt={`${song.title} album art`}
-              className="w-16 h-16 rounded-lg object-cover neon-border"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                const musicIcon = e.currentTarget.nextElementSibling as HTMLElement;
-                if (musicIcon) musicIcon.style.display = 'flex';
-              }}
-            />
-          ) : null}
-          <div 
-            className={`w-16 h-16 rounded-lg neon-border bg-neon-purple/20 flex items-center justify-center ${song.albumArtUrl ? 'hidden' : 'flex'}`}
-          >
-            <Music4 className="w-8 h-8 text-neon-purple" />
-          </div>
+          <AlbumArtDisplay
+            albumArtUrl={song.albumArtUrl}
+            title={song.title}
+            size="md"
+            imageClassName="neon-border"
+          />
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-white truncate">{song.title}</h3>
             {song.artist && (

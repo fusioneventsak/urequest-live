@@ -3,6 +3,7 @@ import { Music4, Search, AlertTriangle, Send, ThumbsUp, Music } from 'lucide-rea
 import { supabase } from '../utils/supabase';
 import { useUiSettings } from '../hooks/useUiSettings';
 import { Logo } from './shared/Logo';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import { Ticker } from './Ticker';
 import { LoadingSpinner } from './shared/LoadingSpinner';
 import { ErrorBoundary } from './shared/ErrorBoundary';
@@ -366,31 +367,12 @@ export function KioskPage({
                       boxShadow: `0 0 8px ${songBorderColor}30`,
                     }}
                   >
-                    {song.albumArtUrl ? (
-                      <img
-                        src={song.albumArtUrl}
-                        alt={`${song.title} album art`}
-                        className="w-16 h-16 object-cover rounded-md"
-                        style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          const container = e.currentTarget.parentElement;
-                          if (container) {
-                            const fallback = document.createElement('div');
-                            fallback.className = "w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20";
-                            fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`;
-                            container.prepend(fallback);
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20">
-                        <Music4 
-                          className="w-8 h-8" 
-                          style={{ color: accentColor }}
-                        />
-                      </div>
-                    )}
+                    <AlbumArtDisplay
+                      albumArtUrl={song.albumArtUrl}
+                      title={song.title}
+                      size="md"
+                      imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
+                    />
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
                       <p className="text-gray-300 text-base truncate">{song.artist}</p>
@@ -582,24 +564,12 @@ export function KioskPage({
               <h2 className="text-xl font-bold text-white mb-4">Request Song</h2>
 
               <div className="flex items-start space-x-4 mb-6">
-                {selectedSong.albumArtUrl ? (
-                  <img
-                    src={selectedSong.albumArtUrl}
-                    alt={`${selectedSong.title} album art`}
-                    className="w-20 h-20 object-cover rounded-lg"
-                    style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
-                  />
-                ) : (
-                  <div 
-                    className="w-20 h-20 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: `${accentColor}20` }}
-                  >
-                    <Music4 
-                      className="w-10 h-10" 
-                      style={{ color: accentColor }}
-                    />
-                  </div>
-                )}
+                <AlbumArtDisplay
+                  albumArtUrl={selectedSong.albumArtUrl}
+                  title={selectedSong.title}
+                  size="lg"
+                  imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
+                />
                 <div>
                   <h3 className="font-medium text-white text-lg">{selectedSong.title}</h3>
                   <p className="text-gray-300 text-base">{selectedSong.artist || 'Unknown Artist'}</p>
