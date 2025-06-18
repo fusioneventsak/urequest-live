@@ -126,22 +126,59 @@ export function useUiSettings() {
       setSettings(settingsToUse);
       setInitialized(true);
       setError(null);
+      
+      console.log('✅ UI settings fetched successfully');
     } catch (err) {
       console.error('Error fetching UI settings:', err);
-      setError(err instanceof Error ? err : new Error(String(err)));
       
-      // Apply default settings on error
-      applyCssVariables(DEFAULT_SETTINGS as UiSettings);
-
+      // Handle network errors gracefully
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
+      if (errorMessage.includes('Failed to fetch') || 
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('network')) {
+        console.warn('🌐 Network error detected, using cached/default settings');
+        setError(null); // Don't treat network errors as app errors
+      } else {
+        setError(err instanceof Error ? err : new Error(String(err)));
+      }
+      
       // Try to load from localStorage as fallback
       const savedColors = localStorage.getItem('uiColors');
       if (savedColors) {
         try {
           const colors = JSON.parse(savedColors);
           applyColorsInstantly(colors);
+          console.log('📱 Applied colors from localStorage due to network error');
+          
+          // Create mock settings from localStorage colors
+          const mockSettings: UiSettings = {
+            ...DEFAULT_SETTINGS,
+            id: 'offline-fallback',
+            frontend_bg_color: colors['--frontend-bg-color'] || DEFAULT_SETTINGS.frontend_bg_color,
+            frontend_accent_color: colors['--frontend-accent-color'] || DEFAULT_SETTINGS.frontend_accent_color,
+            frontend_header_bg: colors['--frontend-header-bg'] || DEFAULT_SETTINGS.frontend_header_bg,
+            frontend_secondary_accent: colors['--frontend-secondary-accent'] || DEFAULT_SETTINGS.frontend_secondary_accent,
+            song_border_color: colors['--song-border-color'] || DEFAULT_SETTINGS.song_border_color,
+            primary_color: colors['--neon-pink'] || DEFAULT_SETTINGS.primary_color,
+            secondary_color: colors['--neon-purple'] || DEFAULT_SETTINGS.secondary_color
+          };
+          
+          setSettings(mockSettings);
+          setInitialized(true);
         } catch (e) {
-          console.error('Error applying saved colors:', e);
+          console.error('Error loading from localStorage:', e);
+          // Apply defaults as last resort
+          applyCssVariables(DEFAULT_SETTINGS as UiSettings);
+          setSettings(DEFAULT_SETTINGS as UiSettings);
+          setInitialized(true);
         }
+      } else {
+        // No localStorage, apply defaults
+        console.log('🎨 Applying default settings due to network error');
+        applyCssVariables(DEFAULT_SETTINGS as UiSettings);
+        setSettings(DEFAULT_SETTINGS as UiSettings);
+        setInitialized(true);
       }
     } finally {
       setLoading(false);
@@ -185,6 +222,7 @@ export function useUiSettings() {
       
       // Apply instantly BEFORE database update
       applyColorsInstantly(colors);
+      console.log('🎨 Colors applied instantly, updating database in background...');
     }
 
     // Then update the database in the background
@@ -217,11 +255,25 @@ export function useUiSettings() {
         if (updateError) throw updateError;
       }
 
+      console.log('✅ Database updated successfully');
+      
       // Force refresh to ensure all components update (but colors already applied)
       await fetchSettings();
       refreshSettings();
     } catch (error) {
-      console.error('Error updating UI settings:', error);
+      console.error('❌ Error updating UI settings database:', error);
+      
+      // Check if it's a network error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Failed to fetch') || 
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('network')) {
+        console.warn('🌐 Network error during database update, but colors were applied instantly');
+        // Don't throw error for network issues since colors are already applied
+        return;
+      }
+      
+      // For other errors, still throw
       throw error;
     }
   }, [fetchSettings, refreshSettings]);
@@ -234,10 +286,10 @@ export function useUiSettings() {
       if (savedColors) {
         const colors = JSON.parse(savedColors);
         applyColorsInstantly(colors);
-        console.log('Applied saved colors from localStorage immediately');
+        console.log('🎨 Applied saved colors from localStorage immediately');
       }
     } catch (e) {
-      console.warn('Error loading colors from localStorage:', e);
+      console.warn('⚠️ Error loading colors from localStorage:', e);
     }
 
     // Start loading settings
@@ -245,33 +297,49 @@ export function useUiSettings() {
     
     // Fetch settings immediately
     fetchSettings().catch(err => {
-      console.error('Error in initial settings fetch:', err);
+      console.error('❌ Error in initial settings fetch:', err);
     });
 
-    // Set up realtime subscription for settings changes
-    const channel = supabase.channel('ui_settings_changes')
-      .on('postgres_changes', 
-          { event: '*', schema: 'public', table: 'ui_settings' },
-          () => {
-            console.log("UI settings changed, fetching updates");
-            fetchSettings().catch(err => {
-              console.error('Error fetching updated settings:', err);
-            });
-          })
-      .subscribe((status) => {
-        console.log('UI settings subscription status:', status);
-      });
+    // Set up realtime subscription for settings changes (only if online)
+    let channel: any = null;
+    let refreshInterval: NodeJS.Timeout | null = null;
     
-    // Set up periodic refresh as a fallback
-    const refreshInterval = setInterval(() => {
-      fetchSettings().catch(err => {
-        console.error('Error in periodic settings refresh:', err);
-      });
-    }, 30000);
+    try {
+      channel = supabase.channel('ui_settings_changes')
+        .on('postgres_changes', 
+            { event: '*', schema: 'public', table: 'ui_settings' },
+            () => {
+              console.log("🔄 UI settings changed, fetching updates");
+              fetchSettings().catch(err => {
+                console.error('❌ Error fetching updated settings:', err);
+              });
+            })
+        .subscribe((status) => {
+          console.log('📡 UI settings subscription status:', status);
+        });
+      
+      // Set up periodic refresh as a fallback (less frequent to reduce errors)
+      refreshInterval = setInterval(() => {
+        fetchSettings().catch(err => {
+          console.warn('⚠️ Periodic settings refresh failed (this is normal if offline):', err);
+        });
+      }, 60000); // Reduced to 1 minute instead of 30 seconds
+      
+    } catch (subscriptionError) {
+      console.warn('⚠️ Could not set up realtime subscription (offline mode):', subscriptionError);
+    }
 
     return () => {
-      clearInterval(refreshInterval);
-      supabase.removeChannel(channel);
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (e) {
+          console.warn('⚠️ Error removing channel:', e);
+        }
+      }
     };
   }, [fetchSettings]); // Only depend on fetchSettings
 
