@@ -6,6 +6,14 @@ import { Ticker } from './Ticker';
 import { ErrorBoundary } from './shared/ErrorBoundary';
 import type { Song, SongRequest, SetList } from '../types';
 
+interface UserFrontendProps {
+  songs: Song[];
+  requests: SongRequest[];
+  activeSetList: SetList | null;
+  logoUrl: string;
+  onSubmitRequest: (title: string, artist: string, requesterData: { name: string; photo: string; message?: string }) => Promise<void>;
+}
+
 // Album Art Component that actually works
 function WorkingAlbumArt({ albumArtUrl, title, size = 'md', style = {} }: { 
   albumArtUrl?: string; 
@@ -57,14 +65,6 @@ function WorkingAlbumArt({ albumArtUrl, title, size = 'md', style = {} }: {
       onError={() => setImageError(true)}
     />
   );
-}
-
-interface UserFrontendProps {
-  songs: Song[];
-  requests: SongRequest[];
-  activeSetList: SetList | null;
-  logoUrl: string;
-  onSubmitRequest: (title: string, artist: string, requesterData: { name: string; photo: string; message?: string }) => Promise<void>;
 }
 
 export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmitRequest }: UserFrontendProps) {
