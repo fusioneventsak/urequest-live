@@ -62,10 +62,13 @@ const applyColorsInstantly = (colors: Record<string, string>) => {
 
 export function useUiSettings() {
   // All useState hooks first - fixed order
-  const [settings, setSettings] = useState<UiSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<UiSettings | null>(() => {
+    // Initialize with defaults immediately - no loading state
+    return DEFAULT_SETTINGS as UiSettings;
+  });
+  const [loading, setLoading] = useState(false); // Start as false - no loading states
   const [timestamp, setTimestamp] = useState(Date.now());
-  const [initialized, setInitialized] = useState(false);
+  const [initialized, setInitialized] = useState(true); // Start as initialized
   const [error, setError] = useState<Error | null>(null);
 
   // All useCallback hooks - fixed order
@@ -123,8 +126,8 @@ export function useUiSettings() {
       // Apply CSS variables immediately for instant color change
       applyCssVariables(settingsToUse);
       
+      // Update settings state but keep initialized as true
       setSettings(settingsToUse);
-      setInitialized(true);
       setError(null);
       
       console.log('✅ UI settings fetched successfully');
@@ -165,24 +168,14 @@ export function useUiSettings() {
           };
           
           setSettings(mockSettings);
-          setInitialized(true);
         } catch (e) {
           console.error('Error loading from localStorage:', e);
-          // Apply defaults as last resort
-          applyCssVariables(DEFAULT_SETTINGS as UiSettings);
-          setSettings(DEFAULT_SETTINGS as UiSettings);
-          setInitialized(true);
+          // Keep defaults that are already set
         }
-      } else {
-        // No localStorage, apply defaults
-        console.log('🎨 Applying default settings due to network error');
-        applyCssVariables(DEFAULT_SETTINGS as UiSettings);
-        setSettings(DEFAULT_SETTINGS as UiSettings);
-        setInitialized(true);
       }
-    } finally {
-      setLoading(false);
+      // If no localStorage, keep the default settings that are already initialized
     }
+    // No finally block - never set loading to false since we never set it to true
   }, [applyCssVariables]);
 
   const updateSettings = useCallback(async (newSettings: Partial<UiSettings>) => {
@@ -287,15 +280,26 @@ export function useUiSettings() {
         const colors = JSON.parse(savedColors);
         applyColorsInstantly(colors);
         console.log('🎨 Applied saved colors from localStorage immediately');
+        
+        // Update settings state with localStorage data immediately
+        const mockSettings: UiSettings = {
+          ...DEFAULT_SETTINGS,
+          id: 'localStorage-initialized',
+          frontend_bg_color: colors['--frontend-bg-color'] || DEFAULT_SETTINGS.frontend_bg_color,
+          frontend_accent_color: colors['--frontend-accent-color'] || DEFAULT_SETTINGS.frontend_accent_color,
+          frontend_header_bg: colors['--frontend-header-bg'] || DEFAULT_SETTINGS.frontend_header_bg,
+          frontend_secondary_accent: colors['--frontend-secondary-accent'] || DEFAULT_SETTINGS.frontend_secondary_accent,
+          song_border_color: colors['--song-border-color'] || DEFAULT_SETTINGS.song_border_color,
+          primary_color: colors['--neon-pink'] || DEFAULT_SETTINGS.primary_color,
+          secondary_color: colors['--neon-purple'] || DEFAULT_SETTINGS.secondary_color
+        };
+        setSettings(mockSettings);
       }
     } catch (e) {
       console.warn('⚠️ Error loading colors from localStorage:', e);
     }
 
-    // Start loading settings
-    setLoading(true);
-    
-    // Fetch settings immediately
+    // Fetch settings from database in the background (no loading states)
     fetchSettings().catch(err => {
       console.error('❌ Error in initial settings fetch:', err);
     });
