@@ -545,7 +545,11 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                     Cancel
                   </button>
                   <button
-                    onClick={() => handleRequestSong(selectedSong)}
+                    onClick={() => handleRequestSubmit({ 
+                      name: requestName, 
+                      photo: currentUser?.photo || generateDefaultAvatar(requestName),
+                      message: requestMessage 
+                    })}
                     disabled={isSubmitting || !requestName.trim()}
                     className="px-4 py-2 rounded-lg text-white transition-colors whitespace-nowrap flex items-center space-x-2 disabled:opacity-50"
                     style={{ backgroundColor: accentColor }}
