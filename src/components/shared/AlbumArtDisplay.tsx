@@ -8,6 +8,7 @@ interface AlbumArtDisplayProps {
   size?: 'xs' | 'sm' | 'md' | 'lg';
   imageClassName?: string;
   imageStyle?: React.CSSProperties;
+  showAlbumArt?: boolean; // New prop to control visibility
 }
 
 export function AlbumArtDisplay({ 
@@ -15,7 +16,8 @@ export function AlbumArtDisplay({
   title, 
   size = 'md', 
   imageClassName = '', 
-  imageStyle = {} 
+  imageStyle = {},
+  showAlbumArt = true // Default to true for backward compatibility
 }: AlbumArtDisplayProps) {
   const [imageLoadError, setImageLoadError] = useState(false);
   const { settings } = useUiSettings();
@@ -39,6 +41,11 @@ export function AlbumArtDisplay({
   const handleImageError = () => {
     setImageLoadError(true);
   };
+
+  // If showAlbumArt is false, don't render anything
+  if (!showAlbumArt) {
+    return null;
+  }
 
   // Show fallback if no URL provided or image failed to load
   if (!albumArtUrl || imageLoadError) {
