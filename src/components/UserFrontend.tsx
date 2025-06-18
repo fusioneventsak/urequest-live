@@ -125,55 +125,71 @@ export function UserFrontend({
 
   return (
     <div className="frontend-container min-h-screen">
-      {/* Header */}
-      <header 
-        className="border-b border-neon-purple/20"
+      {/* Thin top bar for user profile and admin */}
+      <div 
+        className="h-8 border-b border-neon-purple/20 flex justify-between items-center px-4"
         style={{ backgroundColor: navBgColor }}
       >
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center h-12">
-            <button 
-              onClick={() => setIsEditingProfile(true)}
-              className="user-profile flex items-center group"
-              title="Edit Profile"
-            >
-              <img 
-                src={currentUser.photo} 
-                alt={currentUser.name} 
-                className="w-6 h-6 rounded-full object-cover border-2 group-hover:border-opacity-100 border-opacity-75 transition-all"
-                style={{ borderColor: highlightColor }}
-                onError={(e) => {
-                  e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
-                }}
-              />
-              <div 
-                className="user-profile-badge opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ backgroundColor: highlightColor }}
-              >
-                <UserCircle className="w-3 h-3" />
-              </div>
-            </button>
+        <button 
+          onClick={() => setIsEditingProfile(true)}
+          className="user-profile flex items-center group"
+          title="Edit Profile"
+        >
+          <img 
+            src={currentUser.photo} 
+            alt={currentUser.name} 
+            className="w-5 h-5 rounded-full object-cover border group-hover:border-opacity-100 border-opacity-75 transition-all mr-2"
+            style={{ borderColor: highlightColor }}
+            onError={(e) => {
+              e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
+            }}
+          />
+          <span className="text-white text-xs">{currentUser.name}</span>
+        </button>
 
-            <Logo 
-              url={logoUrl}
-              onClick={onLogoClick}
-              className="h-8"
-            />
+        {isAdmin && (
+          <button
+            onClick={onBackendAccess}
+            className="text-xs px-2 py-1 rounded-md border"
+            style={{ 
+              borderColor: accentColor,
+              color: accentColor 
+            }}
+          >
+            Admin
+          </button>
+        )}
+      </div>
 
-            {isAdmin && (
-              <button
-                onClick={onBackendAccess}
-                className="admin-access-button"
-                style={{ 
-                  borderColor: accentColor,
-                  color: accentColor 
-                }}
-              >
-                Admin
-              </button>
-            )}
+      {/* Main header with logo */}
+      <header 
+        className="px-6 pt-10 pb-4 text-center relative border-b border-neon-purple/20"
+        style={{ backgroundColor: settings?.frontend_header_bg || '#13091f' }}
+      >
+        <Logo 
+          url={logoUrl}
+          onClick={onLogoClick}
+          className="h-24 mx-auto mb-6"
+        />
+        <h1 
+          className="text-3xl font-bold mb-2"
+          style={{ color: accentColor, textShadow: `0 0 10px ${accentColor}` }}
+        >
+          {settings?.band_name || 'Band Request Hub'}
+        </h1>
+        
+        {activeSetList && (
+          <div className="mb-2 inline-flex items-center py-1 px-4 rounded-full"
+            style={{ 
+              backgroundColor: `${accentColor}15`,
+              border: `1px solid ${accentColor}30`
+            }}
+          >
+            <span className="text-sm" style={{ color: accentColor }}>
+              Now playing songs from: <span className="font-bold">{activeSetList.name}</span>
+            </span>
           </div>
-        </div>
+        )}
       </header>
 
       {/* Ticker */}
@@ -188,47 +204,19 @@ export function UserFrontend({
       />
 
       {/* Main content */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-6">
-        {/* Tab navigation */}
-        <nav className="mb-6">
-          <div className="tab-container">
-            <button
-              onClick={() => setActiveTab('requests')}
-              className={`tab ${activeTab === 'requests' ? 'tab-active' : 'tab-inactive'}`}
-              style={activeTab === 'requests' ? { 
-                backgroundColor: highlightColor,
-                borderColor: highlightColor 
-              } : {}}
-            >
-              <Music4 className="tab-icon" />
-              Request Songs
-            </button>
-            <button
-              onClick={() => setActiveTab('upvote')}
-              className={`tab ${activeTab === 'upvote' ? 'tab-active' : 'tab-inactive'}`}
-              style={activeTab === 'upvote' ? { 
-                backgroundColor: highlightColor,
-                borderColor: highlightColor 
-              } : {}}
-            >
-              <ThumbsUp className="tab-icon" />
-              Upvote Requests
-            </button>
-          </div>
-        </nav>
-
+      <main className="flex-1 px-6 py-4">
         {/* Tab content */}
         <div className="pb-20">
           {activeTab === 'requests' ? (
             <>
               {/* Search bar */}
-              <div className="relative px-4 mb-6">
+              <div className="relative mb-6">
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search songs by title, artist, or genre..."
-                  className="w-full pl-4 pr-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+                  className="w-full pl-4 pr-4 py-3 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
                 />
               </div>
 
