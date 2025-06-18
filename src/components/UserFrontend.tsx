@@ -32,7 +32,6 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requestMessage, setRequestMessage] = useState('');
-  const [requestName, setRequestName] = useState('');
   const { settings } = useUiSettings();
 
   // Debug colors
@@ -506,17 +505,18 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-white mb-2">
-                    Your Name <span className="text-red-400">*</span>
+                    Requesting as: <span className="text-neon-pink">{currentUser?.name || 'Guest'}</span>
                   </label>
-                  <input
-                    type="text"
-                    value={requestName}
-                    onChange={(e) => setRequestName(e.target.value)}
-                    placeholder="Enter your name"
-                    className="w-full px-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
-                    required
-                    maxLength={50}
-                  />
+                  {currentUser?.photo && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <img
+                        src={currentUser.photo}
+                        alt={currentUser.name}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                      <span className="text-gray-300 text-sm">{currentUser.name}</span>
+                    </div>
+                  )}
                 </div>
                 
                 <div>
@@ -528,7 +528,7 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                     onChange={(e) => setRequestMessage(e.target.value.slice(0, 100))}
                     className="w-full px-4 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
                     placeholder="Add a message..."
-                    rows={2}
+                    rows={3}
                     maxLength={100}
                   />
                   <p className="text-xs text-gray-400 mt-1">
@@ -545,17 +545,13 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                     Cancel
                   </button>
                   <button
-                    onClick={() => handleRequestSubmit({ 
-                      name: requestName, 
-                      photo: currentUser?.photo || generateDefaultAvatar(requestName),
-                      message: requestMessage 
-                    })}
-                    disabled={isSubmitting || !requestName.trim()}
+                    onClick={handleRequestSubmit}
+                    disabled={isSubmitting || !currentUser?.name}
                     className="px-4 py-2 rounded-lg text-white transition-colors whitespace-nowrap flex items-center space-x-2 disabled:opacity-50"
                     style={{ backgroundColor: accentColor }}
                   >
                     <Send className="w-4 h-4 mr-2" />
-                    Submit Request
+                    {isSubmitting ? 'Submitting...' : 'Submit Request'}
                   </button>
                 </div>
               </div>
