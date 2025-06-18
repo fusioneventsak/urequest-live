@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Music4, Upload, Loader2, Filter, Tag } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { searchITunes } from '../utils/itunes';
+import { SongEditorModal } from './SongEditorModal';
 import type { Song } from '../types';
 
 interface SongLibraryProps {
@@ -12,8 +13,9 @@ interface SongLibraryProps {
 }
 
 export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: SongLibraryProps) {
-  const [isAdding, setIsAdding] = useState<'single' | 'bulk' | false>(false);
-  const [editingSongId, setEditingSongId] = useState<string | null>(null);
+  const [isBulkAdding, setIsBulkAdding] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSong, setEditingSong] = useState<Song | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedCount, setProcessedCount] = useState(0);
   const [totalToProcess, setTotalToProcess] = useState(0);
@@ -21,14 +23,6 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
   const [searchTerm, setSearchTerm] = useState('');
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [formData, setFormData] = useState<Omit<Song, 'id'>>({
-    title: '',
-    artist: '',
-    genre: '',
-    key: '',
-    notes: '',
-    albumArtUrl: '',
-  });
 
   // Extract all unique genres from songs
   const availableGenres = useMemo(() => {
@@ -45,78 +39,22 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
     return Array.from(genreSet).sort();
   }, [songs]);
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    
-    if (name === 'genre') {
-      const formattedValue = value
-        .replace(/\s+/g, ' ')
-        .replace(/\s*,\s*/g, ', ')
-        .replace(/^,\s*/, '')
-        .replace(/\s*,$/, '');
-      
-      setFormData(prev => ({
-        ...prev,
-        [name]: formattedValue
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  }, []);
+  // Handle opening modal for adding new song
+  const handleAddSong = () => {
+    setEditingSong(null);
+    setIsModalOpen(true);
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      setIsProcessing(true);
-      
-      // Search for album art
-      const albumArtUrl = await searchITunes(formData.title, formData.artist);
-      
-      const cleanedGenre = formData.genre
-        .trim()
-        .replace(/\s+/g, ' ')
-        .replace(/\s*,\s*/g, ', ')
-        .replace(/^,\s*/, '')
-        .replace(/\s*,$/, '');
+  // Handle opening modal for editing existing song
+  const handleEditSong = (song: Song) => {
+    setEditingSong(song);
+    setIsModalOpen(true);
+  };
 
-      const songData = {
-        ...formData,
-        genre: cleanedGenre,
-        albumArtUrl
-      };
-
-      if (editingSongId) {
-        const { error } = await supabase
-          .from('songs')
-          .update(songData)
-          .eq('id', editingSongId);
-
-        if (error) throw error;
-        onUpdateSong({ id: editingSongId, ...songData });
-      } else {
-        const { data, error } = await supabase
-          .from('songs')
-          .insert(songData)
-          .select()
-          .single();
-
-        if (error) throw error;
-        if (data) onAddSong(data);
-      }
-
-      setFormData({ title: '', artist: '', genre: '', key: '', notes: '', albumArtUrl: '' });
-      setIsAdding(false);
-      setEditingSongId(null);
-    } catch (error) {
-      console.error('Error saving song:', error);
-      alert('Error saving song. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
+  // Handle closing modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingSong(null);
   };
 
   const handleBulkTextSubmit = async () => {
@@ -177,7 +115,7 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
       }
 
       setBulkInput('');
-      setIsAdding(false);
+      setIsBulkAdding(false);
       alert(`Successfully added ${lines.length} songs to the library`);
     } catch (error) {
       console.error('Error bulk adding songs:', error);
@@ -250,7 +188,7 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
       }
 
       alert(`Successfully added ${validSongs.length} songs to the library`);
-      setIsAdding(false);
+      setIsBulkAdding(false);
     } catch (error) {
       console.error('Error processing CSV:', error);
       alert('Error processing CSV file. Please try again.');
@@ -263,19 +201,6 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
       }
     }
   };
-
-  const startEditing = useCallback((song: Song) => {
-    setEditingSongId(song.id);
-    setFormData({
-      title: song.title,
-      artist: song.artist,
-      genre: song.genre || '',
-      key: song.key || '',
-      notes: song.notes || '',
-      albumArtUrl: song.albumArtUrl || '',
-    });
-    setIsAdding('single');
-  }, []);
 
   const handleDeleteSong = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this song?')) {
@@ -360,17 +285,17 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
           <h2 className="text-2xl font-bold neon-text">Song Library</h2>
           <span className="text-neon-pink text-sm">({songs.length} songs)</span>
         </div>
-        {!isAdding && !editingSongId && (
+        {!isBulkAdding && (
           <div className="flex space-x-4">
             <button
-              onClick={() => setIsAdding('bulk')}
+              onClick={() => setIsBulkAdding(true)}
               className="neon-button flex items-center"
             >
               <Upload className="w-4 h-4 mr-2" />
               Bulk Upload
             </button>
             <button
-              onClick={() => setIsAdding('single')}
+              onClick={handleAddSong}
               className="neon-button flex items-center"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -380,124 +305,7 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
         )}
       </div>
 
-      {isAdding === 'single' && (
-        <form onSubmit={handleSubmit} className="glass-effect rounded-lg p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label htmlFor="title" className="block text-sm font-medium mb-2 text-white">Title *</label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                required
-                value={formData.title}
-                onChange={handleInputChange}
-                className="input-field"
-                placeholder="Enter song title"
-              />
-            </div>
-            <div>
-              <label htmlFor="artist" className="block text-sm font-medium mb-2 text-white">Artist *</label>
-              <input
-                type="text"
-                id="artist"
-                name="artist"
-                required
-                value={formData.artist}
-                onChange={handleInputChange}
-                className="input-field"
-                placeholder="Enter artist name"
-              />
-            </div>
-            <div>
-              <label htmlFor="genre" className="block text-sm font-medium mb-2 text-white">
-                Genres
-                <span className="text-gray-400 text-xs ml-2">
-                  (separate with comma and space, e.g. "Rock, Pop, Dance")
-                </span>
-              </label>
-              <input
-                type="text"
-                id="genre"
-                name="genre"
-                value={formData.genre}
-                onChange={handleInputChange}
-                className="input-field"
-                placeholder="Rock, Pop, Dance"
-              />
-            </div>
-            <div>
-              <label htmlFor="key" className="block text-sm font-medium mb-2 text-white">Key</label>
-              <input
-                type="text"
-                id="key"
-                name="key"
-                value={formData.key}
-                onChange={handleInputChange}
-                className="input-field"
-                placeholder="Enter song key"
-              />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="albumArtUrl" className="block text-sm font-medium mb-2 text-white">Album Art URL</label>
-            <input
-              type="url"
-              id="albumArtUrl"
-              name="albumArtUrl"
-              value={formData.albumArtUrl}
-              onChange={handleInputChange}
-              className="input-field"
-              placeholder="https://example.com/album-art.jpg"
-            />
-          </div>
-          <div>
-            <label htmlFor="notes" className="block text-sm font-medium mb-2 text-white">Notes</label>
-            <textarea
-              id="notes"
-              name="notes"
-              value={formData.notes}
-              onChange={handleInputChange}
-              className="input-field"
-              rows={3}
-              placeholder="Add any notes about the song..."
-            />
-          </div>
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => {
-                setIsAdding(false);
-                setEditingSongId(null);
-                setFormData({ title: '', artist: '', genre: '', key: '', notes: '', albumArtUrl: '' });
-              }}
-              className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
-              disabled={isProcessing}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="neon-button flex items-center"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  {editingSongId ? 'Update Song' : 'Add Song'}
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {isAdding === 'bulk' && (
+      {isBulkAdding && (
         <div className="glass-effect rounded-lg p-6 space-y-6">
           <h3 className="text-lg font-semibold text-white mb-4">Bulk Upload Songs</h3>
           
@@ -566,7 +374,7 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
             <div className="flex justify-end space-x-4">
               <button
                 type="button"
-                onClick={() => setIsAdding(false)}
+                onClick={() => setIsBulkAdding(false)}
                 className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
                 disabled={isProcessing}
               >
@@ -595,7 +403,7 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
       )}
 
       {/* Genre filter and search section */}
-      {!isAdding && (
+      {!isBulkAdding && (
         <div className="glass-effect rounded-lg p-4">
           <div className="flex flex-wrap gap-4 md:flex-row md:items-center justify-between">
             <div className="w-full md:w-auto flex-1">
@@ -710,7 +518,7 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
                   <td className="px-6 py-4">
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => startEditing(song)}
+                        onClick={() => handleEditSong(song)}
                         className="p-2 text-neon-pink hover:bg-neon-pink/10 rounded-full transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -729,6 +537,15 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
           </tbody>
         </table>
       </div>
+
+      {/* Song Editor Modal */}
+      <SongEditorModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        song={editingSong}
+        onSave={onUpdateSong}
+        onAdd={onAddSong}
+      />
     </div>
   );
 }
