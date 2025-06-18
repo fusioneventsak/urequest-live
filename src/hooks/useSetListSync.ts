@@ -68,7 +68,20 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
         }
       }
 
-      // Fetch set lists with songs - INCLUDING album_art_url for album art display
+      // First, let's check what columns actually exist in the songs table
+      console.log('Checking songs table structure...');
+      const { data: sampleSong, error: sampleError } = await supabase
+        .from('songs')
+        .select('*')
+        .limit(1)
+        .single();
+      
+      if (!sampleError && sampleSong) {
+        console.log('Songs table columns:', Object.keys(sampleSong));
+        console.log('Sample song data:', sampleSong);
+      }
+
+      // Fetch set lists with songs - use wildcard to get all song columns
       console.log('Fetching set lists with songs...');
       const { data: setListsData, error: setListsError } = await supabase
         .from('set_lists')
@@ -82,15 +95,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
           set_list_songs (
             id,
             position,
-            songs (
-              id,
-              title,
-              artist,
-              genre,
-              key,
-              notes,
-              album_art_url
-            )
+            songs (*)
           )
         `)
         .order('created_at', { ascending: false });
@@ -108,13 +113,18 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
           createdAt: setList.created_at || '',
           songs: (setList.set_list_songs || [])
             .sort((a: any, b: any) => a.position - b.position)
-            .map((sls: any) => ({
-              ...sls.songs,
-              // Explicitly map album_art_url to albumArtUrl for TypeScript consistency
-              albumArtUrl: sls.songs.album_art_url,
-              position: sls.position,
-              setListSongId: sls.id
-            }))
+            .map((sls: any) => {
+              const song = sls.songs;
+              console.log('Processing song from setlist:', song.title, 'Available fields:', Object.keys(song));
+              
+              return {
+                ...song,
+                // Try to map whichever album art field exists (check multiple possibilities)
+                albumArtUrl: song.album_art_url || song.albumArtUrl || song.albumarturl || song.albumart_url || null,
+                position: sls.position,
+                setListSongId: sls.id
+              };
+            })
         }));
 
         // Log active set list for debugging
