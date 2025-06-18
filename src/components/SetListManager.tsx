@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Plus, Save, Trash2, Music4, Check, Edit2, X, Search, Loader2, Play, AlertCircle, Filter, Tags, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../utils/supabase';
-import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import type { Song, SetList } from '../types';
 
 interface SetListManagerProps {
@@ -69,430 +68,270 @@ export function SetListManager({
     );
   }, []);
 
-  useEffect(() => {
-    if (isCreatingByGenre) {
-      setSelectedSongs(songsByGenre);
-    }
-  }, [songsByGenre, isCreatingByGenre]);
+  const filteredSongs = useMemo(() => {
+    let songsToFilter = isCreatingByGenre ? songsByGenre : songs;
+    
+    if (!searchTerm.trim()) return songsToFilter;
+    
+    const searchLower = searchTerm.toLowerCase();
+    return songsToFilter.filter(song => {
+      return (
+        song.title.toLowerCase().includes(searchLower) ||
+        song.artist.toLowerCase().includes(searchLower) ||
+        (song.genre?.toLowerCase() || '').includes(searchLower)
+      );
+    });
+  }, [songs, songsByGenre, searchTerm, isCreatingByGenre]);
 
-  const toggleSetListExpansion = useCallback((setListId: string) => {
-    setExpandedSetLists(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(setListId)) {
-        newSet.delete(setListId);
+  const toggleSongSelection = useCallback((song: Song) => {
+    setSelectedSongs(prev => {
+      const isSelected = prev.find(s => s.id === song.id);
+      if (isSelected) {
+        return prev.filter(s => s.id !== song.id);
       } else {
-        newSet.add(setListId);
+        return [...prev, song];
       }
-      return newSet;
     });
   }, []);
 
-  const handleSetActive = async (id: string) => {
-    if (isActivating || !id) return;
-    setIsActivating(id);
-    
-    try {
-      console.log(`Setting set list ${id} active state...`);
-      await onSetActive(id);
-      console.log(`Set list ${id} activation state updated successfully`);
-    } catch (error) {
-      console.error('Error setting active set list:', error);
-    } finally {
-      setIsActivating(null);
-    } 
-  };
+  const toggleSetListExpansion = useCallback((setListId: string) => {
+    setExpandedSetLists(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(setListId)) {
+        newExpanded.delete(setListId);
+      } else {
+        newExpanded.add(setListId);
+      }
+      return newExpanded;
+    });
+  }, []);
+
+  const resetForm = useCallback(() => {
+    setIsCreating(false);
+    setEditingSetList(null);
+    setSelectedSongs([]);
+    setFormData({
+      name: '',
+      date: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+    setIsCreatingByGenre(false);
+    setSelectedGenres([]);
+    setSearchTerm('');
+  }, []);
+
+  const startEdit = useCallback((setList: SetList) => {
+    setEditingSetList(setList);
+    setSelectedSongs(setList.songs || []);
+    setFormData({
+      name: setList.name,
+      date: typeof setList.date === 'string' ? setList.date.split('T')[0] : setList.date.toISOString().split('T')[0],
+      notes: setList.notes || '',
+    });
+    setIsCreating(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
-    
-    if (!formData.name || !formData.date) {
-      alert('Set list name and date are required');
-      return;
-    }
-    
-    if (selectedSongs.length === 0) {
-      alert('Please select at least one song for your set list');
-      return;
-    }
-    
-    console.log('Saving set list...');
-    setIsSaving(true);
+    if (selectedSongs.length === 0) return;
 
+    setIsSaving(true);
     try {
+      const setListData = {
+        name: formData.name,
+        date: formData.date,
+        notes: formData.notes,
+        songs: selectedSongs,
+        isActive: false,
+      };
+
       if (editingSetList) {
-        console.log('Updating existing set list:', editingSetList.id);
-        
-        await onUpdateSetList({
-          ...editingSetList,
-          name: formData.name,
-          date: new Date(formData.date),
-          notes: formData.notes || '',
-          songs: selectedSongs,
-        });
-        
-        console.log('Set list updated successfully');
+        await onUpdateSetList({ ...setListData, id: editingSetList.id });
       } else {
-        console.log('Creating new set list...');
-        
-        let setListName = formData.name;
-        
-        if (isCreatingByGenre && selectedGenres.length > 0 && !setListName.includes('Genre')) {
-          const genreText = selectedGenres.length > 1 
-            ? `${selectedGenres.length} Genres` 
-            : selectedGenres[0];
-          
-          setListName = setListName || `${genreText} Set`;
-        }
-        
-        await onCreateSetList({
-          name: setListName,
-          date: formData.date,
-          notes: isCreatingByGenre 
-            ? `${formData.notes ? formData.notes + '\n' : ''}Genres: ${selectedGenres.join(', ')}`
-            : formData.notes || '',
-          songs: selectedSongs,
-          isActive: false
-        });
-        
-        console.log('Set list created successfully');
+        await onCreateSetList(setListData);
       }
 
       resetForm();
     } catch (error) {
       console.error('Error saving set list:', error);
-      alert('Error saving set list. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const resetForm = () => {
-    setIsCreating(false);
-    setIsCreatingByGenre(false);
-    setEditingSetList(null);
-    setSelectedSongs([]);
-    setSelectedGenres([]);
-    setFormData({
-      name: '',
-      date: new Date().toISOString().split('T')[0],
-      notes: '',
-    });
-    setSearchTerm('');
+  const handleSetActive = async (id: string) => {
+    setIsActivating(id);
+    try {
+      await onSetActive(id);
+    } catch (error) {
+      console.error('Error setting active set list:', error);
+    } finally {
+      setIsActivating(null);
+    }
   };
 
   const handleDeleteSetList = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this set list?')) {
-      return;
-    }
-
-    try {
+    if (window.confirm('Are you sure you want to delete this set list?')) {
       await onDeleteSetList(id);
-    } catch (error) {
-      console.error('Error deleting set list:', error);
-      alert('Error deleting set list. Please try again.');
     }
   };
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  }, []);
-
-  const startEditing = useCallback((setList: SetList) => {
-    setEditingSetList(setList);
-    setFormData({
-      name: setList.name,
-      date: new Date(setList.date).toISOString().split('T')[0],
-      notes: setList.notes || '',
-    });
-    setSelectedSongs(setList.songs || []);
-    setIsCreating(true);
-    setIsCreatingByGenre(false);
-  }, []);
-
-  const toggleSongSelection = useCallback((song: Song) => {
-    setSelectedSongs(prev => 
-      prev.find(s => s.id === song.id)
-        ? prev.filter(s => s.id !== song.id)
-        : [...prev, song]
-    );
-  }, []);
-
-  const handleStartGenreCreate = useCallback(() => {
-    setIsCreating(true);
-    setIsCreatingByGenre(true);
-    setFormData({
-      name: '',
-      date: new Date().toISOString().split('T')[0],
-      notes: '',
-    });
-    setSelectedGenres([]);
-    setSelectedSongs([]);
-  }, []);
-
-  const filteredSongs = useMemo(() => {
-    if (isCreatingByGenre && selectedGenres.length > 0) {
-      return songsByGenre.filter(
-        song =>
-          song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          song.artist.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+  const renderGenres = (genreString: string) => {
+    if (!genreString) return null;
     
-    return songs.filter(
-      song =>
-        song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        song.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (song.genre?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    );
-  }, [songs, searchTerm, isCreatingByGenre, selectedGenres, songsByGenre]);
-
-  const renderGenres = useCallback((genres: string | undefined) => {
-    if (!genres) return null;
-    return genres.split(',').map((genre, index) => (
-      <span
-        key={index}
-        className="inline-block px-2 py-0.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full mr-1 mb-1"
+    return genreString.split(',').map((genre, index) => (
+      <span 
+        key={index} 
+        className="inline-block px-1.5 py-0.5 mr-1 mb-1 text-xs rounded-full bg-neon-purple/20 text-gray-300"
       >
         {genre.trim()}
       </span>
     ));
-  }, []);
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-2xl font-bold neon-text">Set Lists</h2>
-          <span className="text-neon-pink text-sm">({setLists.length} lists)</span>
-        </div>
-        {!isCreating && (
-          <div className="flex space-x-3">
-            <button
-              onClick={handleStartGenreCreate}
-              className="neon-button flex items-center bg-neon-purple/20"
-            >
-              <Tags className="w-4 h-4 mr-2" />
-              Genre Set List
-            </button>
-            <button
-              onClick={() => setIsCreating(true)}
-              className="neon-button flex items-center"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create Set List
-            </button>
-          </div>
-        )}
+        <h2 className="text-2xl font-bold text-white">Set List Manager</h2>
+        <button
+          onClick={() => setIsCreating(true)}
+          className="neon-button flex items-center"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Create Set List
+        </button>
       </div>
 
       {isCreating && (
-        <form onSubmit={handleSubmit} className="glass-effect p-6 rounded-lg space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-semibold text-white">
-              {editingSetList 
-                ? 'Edit Set List' 
-                : isCreatingByGenre 
-                  ? 'Create Set List by Genre' 
-                  : 'Create Set List'
-              }
+        <form onSubmit={handleSubmit} className="glass-effect rounded-lg p-6 space-y-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-white">
+              {editingSetList ? 'Edit Set List' : 'Create New Set List'}
             </h3>
-            
-            {isCreatingByGenre && (
-              <div className="px-3 py-1 bg-neon-purple/10 rounded-md text-sm text-neon-pink flex items-center">
-                <Filter className="w-3 h-3 mr-1" />
-                Creating by genre
-              </div>
-            )}
+            <div className="flex space-x-2">
+              <button
+                type="button"
+                onClick={() => setIsCreatingByGenre(!isCreatingByGenre)}
+                className={`px-3 py-1 text-sm rounded-md ${
+                  isCreatingByGenre
+                    ? 'bg-neon-pink text-white'
+                    : 'bg-neon-purple/20 text-gray-300 hover:text-white'
+                }`}
+              >
+                <Tags className="w-4 h-4 mr-1 inline" />
+                By Genre
+              </button>
+            </div>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-white mb-2">Set List Name *</label>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
+                Set List Name
+              </label>
               <input
                 type="text"
-                name="name"
-                required
+                id="name"
                 value={formData.name}
-                onChange={handleInputChange}
-                className="input-field"
-                placeholder={isCreatingByGenre ? "e.g., Pop Night" : "e.g., Friday Night Show"}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+                placeholder="Enter set list name"
+                required
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-white mb-2">Date *</label>
+              <label htmlFor="date" className="block text-sm font-medium text-gray-300 mb-1">
+                Date
+              </label>
               <input
                 type="date"
-                name="date"
-                required
+                id="date"
                 value={formData.date}
-                onChange={handleInputChange}
-                className="input-field"
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="w-full px-3 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+                required
               />
             </div>
           </div>
-          
+
           <div>
-            <label className="block text-sm font-medium text-white mb-2">Notes</label>
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-300 mb-1">
+              Notes
+            </label>
             <textarea
-              name="notes"
+              id="notes"
               value={formData.notes}
-              onChange={handleInputChange}
-              className="input-field"
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full px-3 py-2 bg-neon-purple/10 border border-neon-purple/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+              placeholder="Optional notes for this set list"
               rows={3}
-              placeholder="Any special notes for this set list..."
             />
           </div>
 
-          {isCreatingByGenre ? (
+          {isCreatingByGenre && (
             <div>
-              <div className="flex justify-between items-center">
-                <label className="block text-sm font-medium text-white mb-2">
-                  Select Genres
-                </label>
-                <div className="text-xs text-gray-400">
-                  {selectedGenres.length} genres selected ({songsByGenre.length} songs)
-                </div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Select Genres ({selectedGenres.length} selected)
+              </label>
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border border-neon-purple/20 rounded-md p-2">
+                {availableGenres.map(genre => (
+                  <button
+                    key={genre}
+                    type="button"
+                    onClick={() => toggleGenreSelection(genre)}
+                    className={`px-2 py-1 text-xs rounded-full transition-colors ${
+                      selectedGenres.includes(genre)
+                        ? 'bg-neon-pink text-white'
+                        : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {genre}
+                  </button>
+                ))}
               </div>
-              
-              <div className="flex flex-wrap gap-2 mb-4">
-                {availableGenres.length > 0 ? (
-                  availableGenres.map(genre => (
-                    <button
-                      key={genre}
-                      type="button"
-                      onClick={() => toggleGenreSelection(genre)}
-                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                        selectedGenres.includes(genre)
-                          ? 'bg-neon-pink text-white' 
-                          : 'bg-neon-purple/10 text-gray-300 hover:text-white hover:bg-neon-purple/20'
-                      }`}
-                    >
-                      {genre}
-                    </button>
-                  ))
-                ) : (
-                  <div className="text-gray-400 text-sm py-2">
-                    No genres found. Add genres to your songs first.
-                  </div>
-                )}
-              </div>
-
               {selectedGenres.length > 0 && (
-                <>
-                  <div className="flex justify-between items-center mb-4">
-                    <label className="block text-sm font-medium text-white">
-                      Songs in Selected Genres ({songsByGenre.length})
-                    </label>
-                    <div className="relative w-64">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Filter songs..."
-                        className="input-field pl-10 py-1"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="max-h-[400px] overflow-y-auto space-y-2 border border-neon-purple/20 rounded-lg p-2">
-                    {filteredSongs.length > 0 ? (
-                      filteredSongs.map(song => (
-                        <div
-                          key={song.id}
-                          className="flex items-center justify-between p-2 bg-neon-purple/10 rounded"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <AlbumArtDisplay
-                              albumArtUrl={song.albumArtUrl}
-                              title={song.title}
-                              size="sm"
-                              imageClassName="neon-border"
-                            />
-                            <div>
-                              <span className="font-medium text-white">{song.title}</span>
-                              <p className="text-sm text-gray-300">{song.artist}</p>
-                              <div className="flex flex-wrap mt-1">
-                                {song.genre?.split(',').map((g, i) => (
-                                  <span 
-                                    key={i} 
-                                    className={`inline-block px-2 py-0.5 mr-1 text-xs rounded-full ${
-                                      selectedGenres.includes(g.trim())
-                                        ? 'bg-neon-pink/20 text-neon-pink'
-                                        : 'bg-gray-700/50 text-gray-300'
-                                    }`}
-                                  >
-                                    {g.trim()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => toggleSongSelection(song)}
-                            className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                              selectedSongs.find(s => s.id === song.id)
-                                ? 'bg-neon-pink text-white'
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            {selectedSongs.find(s => s.id === song.id) ? (
-                              <Check className="w-3 h-3" />
-                            ) : (
-                              <Plus className="w-3 h-3" />
-                            )}
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-gray-400 text-center py-4">
-                        No matching songs found
-                      </div>
-                    )}
-                  </div>
-                </>
+                <p className="text-sm text-gray-400 mt-1">
+                  {songsByGenre.length} songs match selected genres
+                </p>
               )}
             </div>
-          ) : (
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <label className="block text-sm font-medium text-white">Select Songs</label>
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search songs..."
-                    className="input-field pl-10 py-1"
-                  />
-                </div>
-              </div>
+          )}
 
-              <div className="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
-                {filteredSongs.map((song) => (
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-300">
+                Select Songs ({selectedSongs.length} selected)
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search songs..."
+                  className="pl-9 pr-3 py-1 text-sm bg-neon-purple/10 border border-neon-purple/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-neon-pink"
+                />
+              </div>
+            </div>
+
+            <div className="max-h-64 overflow-y-auto border border-neon-purple/20 rounded-md">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-2">
+                {filteredSongs.map(song => (
                   <div
                     key={song.id}
                     onClick={() => toggleSongSelection(song)}
-                    className={`p-4 rounded cursor-pointer transition-colors ${
-                      selectedSongs.find((s) => s.id === song.id)
+                    className={`flex items-center justify-between p-2 rounded cursor-pointer ${
+                      selectedSongs.find(s => s.id === song.id)
                         ? 'bg-neon-purple/20 border-neon-pink border'
                         : 'hover:bg-neon-purple/10'
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <AlbumArtDisplay
-                        albumArtUrl={song.albumArtUrl}
-                        title={song.title}
-                        size="sm"
-                        imageClassName="neon-border"
-                      />
+                      {/* Music icon instead of album art for setlist manager */}
+                      <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                        <Music4 className="w-6 h-6 text-neon-pink" />
+                      </div>
                       <div>
                         <p className="font-medium text-white">{song.title}</p>
                         <p className="text-sm text-gray-300">{song.artist}</p>
@@ -511,7 +350,7 @@ export function SetListManager({
                 )}
               </div>
             </div>
-          )}
+          </div>
 
           {selectedSongs.length > 0 && (
             <div className="mt-4">
@@ -535,12 +374,10 @@ export function SetListManager({
                   >
                     <div className="flex items-center space-x-3">
                       <span className="text-gray-400 text-sm">{index + 1}.</span>
-                      <AlbumArtDisplay
-                        albumArtUrl={song.albumArtUrl}
-                        title={song.title}
-                        size="sm"
-                        imageClassName="neon-border"
-                      />
+                      {/* Music icon instead of album art for setlist manager */}
+                      <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                        <Music4 className="w-6 h-6 text-neon-pink" />
+                      </div>
                       <div>
                         <span className="font-medium text-white">{song.title}</span>
                         <p className="text-sm text-gray-300">{song.artist}</p>
@@ -599,113 +436,72 @@ export function SetListManager({
             <p className="text-gray-300 mb-4">
               Create your first set list to organize the songs your band will play.
             </p>
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={handleStartGenreCreate}
-                className="neon-button flex items-center"
-              >
-                <Tags className="w-4 h-4 mr-2" />
-                Create by Genre
-              </button>
-              <button
-                onClick={() => setIsCreating(true)}
-                className="neon-button flex items-center"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Set List
-              </button>
-            </div>
+            <button
+              onClick={() => setIsCreating(true)}
+              className="neon-button flex items-center mx-auto"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Set List
+            </button>
           </div>
         ) : (
           setLists.map((setList) => {
             const isExpanded = expandedSetLists.has(setList.id);
+            const isActivatingThis = isActivating === setList.id;
             
             return (
-              <div
-                key={setList.id}
-                className={`glass-effect rounded-lg p-4 transition-all duration-300 relative ${
-                  setList.isActive ? 'set-list-active' : ''
-                }`}
-              >
-                {setList.isActive && (
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-pulse"></div>
-                )}
-                
-                <div className="flex justify-between items-start mb-4">
+              <div key={setList.id} className="glass-effect rounded-lg p-4">
+                <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-lg font-semibold text-white">{setList.name}</h3>
-                      <div className={`status-badge ${setList.isActive ? 'status-badge-active' : 'status-badge-inactive'}`}>
-                        <div className={`w-2 h-2 rounded-full ${setList.isActive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
-                        <span>{setList.isActive ? 'Active' : 'Inactive'}</span>
-                        {setList.isActive && (
-                          <span className="ml-2 text-xs">
-                            ({setList.songs?.length || 0} songs available)
-                          </span>
-                        )}
-                      </div>
+                    <div className="flex items-center space-x-3">
+                      <h3 className="text-lg font-medium text-white">{setList.name}</h3>
+                      {setList.isActive && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-300">
+                          <Play className="w-3 h-3 mr-1" />
+                          Active
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-300">
                       {new Date(setList.date).toLocaleDateString()} • {setList.songs?.length || 0} songs
                     </p>
                     {setList.notes && (
-                      <p className="text-sm text-gray-300 mt-1">{setList.notes}</p>
+                      <p className="text-sm text-gray-400 mt-1">{setList.notes}</p>
                     )}
                   </div>
-                  
-                  <div className="flex items-center space-x-2 ml-4">
+
+                  <div className="flex items-center space-x-2">
+                    {!setList.isActive && (
+                      <button
+                        onClick={() => handleSetActive(setList.id)}
+                        disabled={isActivatingThis}
+                        className="px-3 py-1 text-sm rounded-md bg-green-500/20 text-green-300 hover:bg-green-500/30 disabled:opacity-50"
+                      >
+                        {isActivatingThis ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin inline" />
+                            Activating...
+                          </>
+                        ) : (
+                          'Set Active'
+                        )}
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleSetActive(setList.id)}
-                      className={`set-list-action ${
-                        setList.isActive
-                          ? 'set-list-action-active'
-                          : 'set-list-action-inactive'
-                      }`}
-                      disabled={isActivating === setList.id}
-                    >
-                      {isActivating === setList.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : setList.isActive ? (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>Active</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4" />
-                          <span>Activate</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => startEditing(setList)}
+                      onClick={() => startEdit(setList)}
                       className="p-2 text-neon-pink hover:bg-neon-pink/10 rounded-full"
-                      title="Edit Set List"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (setList.isActive) {
-                          alert('Cannot delete an active set list. Please deactivate it first.');
-                          return;
-                        }
-                        handleDeleteSetList(setList.id);
-                      }}
-                      className={`p-2 rounded-full ${
-                        setList.isActive
-                          ? 'text-gray-400 cursor-not-allowed'
-                          : 'text-red-400 hover:text-red-300 hover:bg-red-400/20'
-                      }`}
-                      title={setList.isActive ? 'Cannot delete active set list' : 'Delete Set List'}
-                      disabled={setList.isActive}
+                      onClick={() => handleDeleteSetList(setList.id)}
+                      className="p-2 text-red-400 hover:bg-red-400/20 rounded-full"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                    
                     <button
                       onClick={() => toggleSetListExpansion(setList.id)}
-                      className="p-2 text-gray-400 hover:text-white hover:bg-neon-purple/10 rounded-full transition-colors"
+                      className="p-2 text-gray-400 hover:text-white rounded-full"
                       title={isExpanded ? 'Hide songs' : 'Show songs'}
                     >
                       {isExpanded ? (
@@ -718,7 +514,7 @@ export function SetListManager({
                 </div>
 
                 {isExpanded && (
-                  <div className="space-y-2 transition-all duration-300">
+                  <div className="space-y-2 transition-all duration-300 mt-4">
                     {setList.songs && setList.songs.length > 0 ? (
                       setList.songs.map((song, index) => (
                         <div
@@ -726,12 +522,10 @@ export function SetListManager({
                           className="flex items-center space-x-3 p-2 bg-neon-purple/10 rounded"
                         >
                           <span className="text-gray-400 text-sm">{index + 1}.</span>
-                          <AlbumArtDisplay
-                            albumArtUrl={song.albumArtUrl}
-                            title={song.title}
-                            size="sm"
-                            imageClassName="neon-border"
-                          />
+                          {/* Music icon instead of album art for setlist manager */}
+                          <div className="w-12 h-12 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                            <Music4 className="w-6 h-6 text-neon-pink" />
+                          </div>
                           <div>
                             <span className="font-medium text-white">{song.title}</span>
                             <p className="text-sm text-gray-300">{song.artist}</p>
