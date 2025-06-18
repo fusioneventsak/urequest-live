@@ -454,20 +454,21 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
               <h2 className="text-xl font-bold text-white mb-4">Request Song</h2>
 
               <div className="flex items-start space-x-4 mb-6">
-                {/* Direct img approach that works */}
-                {selectedSong.albumArtUrl ? (
-                  <img
-                    src={selectedSong.albumArtUrl}
-                    alt={`${selectedSong.title} album art`}
-                    className="w-20 h-20 object-cover rounded-md flex-shrink-0"
-                    style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
-                    onError={(e) => console.log('UserFrontend modal img failed:', selectedSong.albumArtUrl)}
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
-                    <Music4 className="w-10 h-10" style={{ color: accentColor }} />
-                  </div>
-                )}
+                {/* Direct img like the working upvote section */}
+                <div className="w-20 h-20 flex-shrink-0 relative">
+                  {selectedSong.albumArtUrl ? (
+                    <img
+                      src={selectedSong.albumArtUrl}
+                      alt={`${selectedSong.title} album art`}
+                      className="w-20 h-20 object-cover rounded-md"
+                      style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                      <Music4 className="w-10 h-10" style={{ color: accentColor }} />
+                    </div>
+                  )}
+                </div>
                 <div>
                   <h3 className="font-medium text-white text-lg">{selectedSong.title}</h3>
                   <p className="text-gray-300 text-base">{selectedSong.artist || 'Unknown Artist'}</p>
