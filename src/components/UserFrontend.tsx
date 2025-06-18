@@ -25,6 +25,12 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
   const [requestName, setRequestName] = useState('');
   const { settings } = useUiSettings();
 
+  // Debug colors
+  useEffect(() => {
+    console.log('UserFrontend settings:', settings);
+    console.log('Accent color:', settings?.frontend_accent_color);
+  }, [settings]);
+
   // Get colors from settings
   const headerBgColor = settings?.frontend_header_bg || '#13091f';
   const accentColor = settings?.frontend_accent_color || '#ff00ff';
@@ -150,7 +156,16 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
 
   return (
     <ErrorBoundary>
-      <div className="frontend-container min-h-screen flex flex-col">
+      <div 
+        className="frontend-container min-h-screen flex flex-col"
+        style={{
+          '--accent-color': accentColor,
+          '--header-bg-color': headerBgColor,
+          '--nav-bg-color': navBgColor,
+          '--highlight-color': highlightColor,
+          '--song-border-color': songBorderColor
+        } as React.CSSProperties}
+      >
         {/* Header with logo and band name - same as kiosk but no QR */}
         <header 
           className="px-6 pt-10 pb-4 text-center relative"
@@ -231,12 +246,20 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                       boxShadow: `0 0 8px ${songBorderColor}30`,
                     }}
                   >
-                    <AlbumArtDisplay
-                      albumArtUrl={song.albumArtUrl}
-                      title={song.title}
-                      size="md"
-                      imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
-                    />
+                    {/* Direct img approach that works */}
+                    {song.albumArtUrl ? (
+                      <img
+                        src={song.albumArtUrl}
+                        alt={`${song.title} album art`}
+                        className="w-16 h-16 object-cover rounded-md flex-shrink-0"
+                        style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
+                        onError={(e) => console.log('UserFrontend img failed:', song.albumArtUrl)}
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                        <Music4 className="w-8 h-8" style={{ color: accentColor }} />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
                       <p className="text-gray-300 text-base truncate">{song.artist}</p>
@@ -310,11 +333,19 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
                         boxShadow: `0 0 8px ${songBorderColor}50`,
                       }}
                     >
-                      <AlbumArtDisplay
-                        albumArtUrl={matchingSong?.albumArtUrl}
-                        title={request.title}
-                        size="md"
-                      />
+                      {/* Direct img approach that works */}
+                      {matchingSong?.albumArtUrl ? (
+                        <img
+                          src={matchingSong.albumArtUrl}
+                          alt={`${request.title} album art`}
+                          className="w-16 h-16 object-cover rounded-md flex-shrink-0"
+                          onError={(e) => console.log('Upvote img failed:', matchingSong.albumArtUrl)}
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                          <Music4 className="w-8 h-8" style={{ color: accentColor }} />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-white text-lg truncate">{request.title}</h3>
                         <p className="text-gray-300 truncate">{request.artist}</p>
@@ -422,12 +453,20 @@ export function UserFrontend({ songs, requests, activeSetList, logoUrl, onSubmit
               <h2 className="text-xl font-bold text-white mb-4">Request Song</h2>
 
               <div className="flex items-start space-x-4 mb-6">
-                <AlbumArtDisplay
-                  albumArtUrl={selectedSong.albumArtUrl}
-                  title={selectedSong.title}
-                  size="lg"
-                  imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
-                />
+                {/* Direct img approach that works */}
+                {selectedSong.albumArtUrl ? (
+                  <img
+                    src={selectedSong.albumArtUrl}
+                    alt={`${selectedSong.title} album art`}
+                    className="w-20 h-20 object-cover rounded-md flex-shrink-0"
+                    style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
+                    onError={(e) => console.log('UserFrontend modal img failed:', selectedSong.albumArtUrl)}
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0">
+                    <Music4 className="w-10 h-10" style={{ color: accentColor }} />
+                  </div>
+                )}
                 <div>
                   <h3 className="font-medium text-white text-lg">{selectedSong.title}</h3>
                   <p className="text-gray-300 text-base">{selectedSong.artist || 'Unknown Artist'}</p>
