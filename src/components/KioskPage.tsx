@@ -367,11 +367,11 @@ export function KioskPage({
                       boxShadow: `0 0 8px ${songBorderColor}30`,
                     }}
                   >
-                    <WorkingAlbumArt
+                    <AlbumArtDisplay
                       albumArtUrl={song.albumArtUrl}
                       title={song.title}
                       size="md"
-                      style={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
+                      imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}30` }}
                     />
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-white text-xl truncate">{song.title}</h3>
@@ -564,11 +564,11 @@ export function KioskPage({
               <h2 className="text-xl font-bold text-white mb-4">Request Song</h2>
 
               <div className="flex items-start space-x-4 mb-6">
-                <WorkingAlbumArt
+                <AlbumArtDisplay
                   albumArtUrl={selectedSong.albumArtUrl}
                   title={selectedSong.title}
                   size="lg"
-                  style={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
+                  imageStyle={{ boxShadow: `0 0 10px ${songBorderColor}50` }}
                 />
                 <div>
                   <h3 className="font-medium text-white text-lg">{selectedSong.title}</h3>
