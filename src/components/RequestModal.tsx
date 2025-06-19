@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { X, AlertTriangle, Music, User } from 'lucide-react';
 import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import type { Song, User as UserType } from '../types';
 import { usePhotoStorage } from '../hooks/usePhotoStorage';
 import toast from 'react-hot-toast';
@@ -181,11 +182,13 @@ export function RequestModal({
           {/* Song Display */}
           <div className="bg-gray-800/50 rounded-xl p-4 space-y-4">
             <div className="flex items-center space-x-4">
-              <AlbumArtDisplay 
-                song={song} 
-                size="medium" 
-                className="rounded-lg shadow-lg" 
-              />
+              <div className="flex-shrink-0">
+                <AlbumArtDisplay 
+                  song={song} 
+                  size="medium" 
+                  className="rounded-lg shadow-lg" 
+                />
+              </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-white text-lg truncate">
                   {song.title}

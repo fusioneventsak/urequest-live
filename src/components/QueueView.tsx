@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { ThumbsUp, Lock, CheckCircle2, ChevronDown, ChevronUp, Users, UserCircle } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { useUiSettings } from '../hooks/useUiSettings';
+import { AlbumArtDisplay } from './shared/AlbumArtDisplay';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import type { SongRequest } from '../types';
@@ -427,21 +428,23 @@ export function QueueView({ requests, onLockRequest, onMarkPlayed, onResetQueue 
                         key={`${request.id}-requester-${index}-${requester.id}`}
                         className="flex items-center space-x-2 bg-neon-purple/10 rounded-lg p-2.5"
                       >
-                        {requester.photo ? (
-                          <img
-                            src={requester.photo}
-                            alt={requester.name || "Requester"}
-                            className="w-8 h-8 rounded-full border-2"
-                            style={{ borderColor: accentColor }}
-                            title={requester.name || "Requester"}
-                            onError={(e) => {
-                              e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
-                              e.currentTarget.className = "w-8 h-8 rounded-full bg-gray-700 p-0.5 text-white";
-                            }}
-                          />
-                        ) : (
-                          <UserCircle className="w-8 h-8 text-gray-400" />
-                        )}
+                        <div className="flex-shrink-0">
+                          {requester.photo ? (
+                            <img
+                              src={requester.photo}
+                              alt={requester.name || "Requester"}
+                              className="w-8 h-8 rounded-full border-2"
+                              style={{ borderColor: accentColor }}
+                              title={requester.name || "Requester"}
+                              onError={(e) => {
+                                e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
+                                e.currentTarget.className = "w-8 h-8 rounded-full bg-gray-700 p-0.5 text-white";
+                              }}
+                            />
+                          ) : (
+                            <UserCircle className="w-8 h-8 text-gray-400" />
+                          )}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline justify-between">
                             <span className="font-medium text-white text-sm truncate">

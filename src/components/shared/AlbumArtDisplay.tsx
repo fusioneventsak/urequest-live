@@ -6,7 +6,7 @@ import type { Song } from '../../types';
 interface AlbumArtDisplayProps {
   albumArtUrl?: string;
   title?: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'medium' | 'lg';
   imageClassName?: string;
   imageStyle?: React.CSSProperties;
   song?: Song;
@@ -16,7 +16,7 @@ interface AlbumArtDisplayProps {
 export function AlbumArtDisplay({ 
   albumArtUrl, 
   title, 
-  size = 'md', 
+  size = 'medium', 
   imageClassName = '', 
   imageStyle = {},
   song,
@@ -34,19 +34,19 @@ export function AlbumArtDisplay({
   const sizeClasses = {
     xs: 'w-14 h-14',
     sm: 'w-12 h-12',
-    md: 'w-16 h-16',
+    medium: 'w-16 h-16',
     lg: 'w-20 h-20'
   };
 
   const iconSizes = {
     xs: 'w-6 h-6',
     sm: 'w-6 h-6',
-    md: 'w-8 h-8',
+    medium: 'w-8 h-8',
     lg: 'w-10 h-10'
   };
 
-  const handleImageError = () => {
-    console.log('Image failed to load:', displayUrl);
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    console.error('Album art failed to load:', displayUrl);
     setImageLoadError(true);
   };
 
@@ -73,7 +73,10 @@ export function AlbumArtDisplay({
       src={displayUrl}
       alt={`${displayTitle} album art`}
       className={`${sizeClasses[size]} object-cover rounded-md flex-shrink-0 ${imageClassName} ${className}`}
-      style={imageStyle}
+      style={{
+        boxShadow: `0 0 10px ${accentColor}30`,
+        ...imageStyle
+      }}
       onError={handleImageError}
     />
   );

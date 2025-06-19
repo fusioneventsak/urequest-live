@@ -495,8 +495,7 @@ export function SongLibrary({ songs, onAddSong, onUpdateSong, onDeleteSong }: So
                   <td className="px-6 py-4 text-sm text-gray-300">{index + 1}</td>
                   <td className="px-6 py-4">
                     <AlbumArtDisplay
-                      albumArtUrl={song.albumArtUrl}
-                      title={song.title}
+                      song={song}
                       size="sm"
                       imageClassName="neon-border"
                     />
