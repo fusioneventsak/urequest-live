@@ -94,6 +94,14 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
               notes,
               "albumArtUrl"
             )
+              id,
+              title,
+              artist,
+              genre,
+              key,
+              notes,
+              "albumArtUrl"
+            )
           )
         `)
         .order('created_at', { ascending: false });
@@ -113,7 +121,7 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
             .sort((a: any, b: any) => a.position - b.position)
             .map((sls: any) => {
               const song = sls.songs;
-              
+              console.log('Processing song from setlist:', song.title, 'Album art:', song.albumArtUrl);
               return {
                 ...song,
                 // Use the standardized albumArtUrl field
