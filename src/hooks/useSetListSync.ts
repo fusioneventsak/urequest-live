@@ -70,16 +70,6 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
 
       // First, let's check what columns actually exist in the songs table
       console.log('Checking songs table structure...');
-      const { data: sampleSong, error: sampleError } = await supabase
-        .from('songs')
-        .select('*')
-        .limit(1)
-        .single();
-      
-      if (!sampleError && sampleSong) {
-        console.log('Songs table columns:', Object.keys(sampleSong));
-        console.log('Sample song data:', sampleSong);
-      }
 
       // Fetch set lists with songs - use wildcard to get all song columns
       console.log('Fetching set lists with songs...');
@@ -95,7 +85,15 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
           set_list_songs (
             id,
             position,
-            songs (*)
+            songs (
+              id,
+              title,
+              artist,
+              genre,
+              key,
+              notes,
+              "albumArtUrl"
+            )
           )
         `)
         .order('created_at', { ascending: false });
@@ -115,12 +113,11 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
             .sort((a: any, b: any) => a.position - b.position)
             .map((sls: any) => {
               const song = sls.songs;
-              console.log('Processing song from setlist:', song.title, 'Available fields:', Object.keys(song));
               
               return {
                 ...song,
-                // Try to map whichever album art field exists (check multiple possibilities)
-                albumArtUrl: song.album_art_url || song.albumArtUrl || song.albumarturl || song.albumart_url || null,
+                // Use the standardized albumArtUrl field
+                albumArtUrl: song.albumArtUrl || null,
                 position: sls.position,
                 setListSongId: sls.id
               };

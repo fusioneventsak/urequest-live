@@ -50,7 +50,17 @@ export function useSongSync(onUpdate: (songs: Song[]) => void) {
       console.log('Fetching songs...');
       const { data: songsData, error: songsError } = await supabase
         .from('songs')
-        .select('*')
+        .select(`
+          id,
+          title,
+          artist,
+          genre,
+          key,
+          notes,
+          "albumArtUrl",
+          created_at,
+          updated_at
+        `)
         .order('title');
 
       if (songsError) throw songsError;
