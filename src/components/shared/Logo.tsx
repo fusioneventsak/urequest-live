@@ -66,7 +66,9 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
         }}
       />
 
-      <style jsx>{`
+      <style 
+        
+        >{`
         @keyframes logoPulse {
           0%, 100% {
             opacity: 0.5;
