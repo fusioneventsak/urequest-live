@@ -47,7 +47,18 @@ function App() {
   
   // App data state
   const [songs, setSongs] = useState<Song[]>([]);
-  const [requests, setRequests] = useState<SongRequest[]>([]);
+  const [requests, setRequestsState] = useState<SongRequest[]>([]);
+  
+  // Debug wrapper for setRequests
+  const setRequests = useCallback((newRequests: any) => {
+    console.log('🔄 setRequests called with:', newRequests);
+    if (Array.isArray(newRequests)) {
+      console.log('📥 Setting requests to array of length:', newRequests.length);
+    } else if (typeof newRequests === 'function') {
+      console.log('📥 Setting requests with function');
+    }
+    setRequestsState(newRequests);
+  }, []);
   
   const [setLists, setSetLists] = useState<SetList[]>([]);
   const [activeSetList, setActiveSetList] = useState<SetList | null>(null);
@@ -145,6 +156,61 @@ function App() {
     hasAnonKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
     keyLength: import.meta.env.VITE_SUPABASE_ANON_KEY?.length || 0
   });
+
+  // DEBUG REQUESTS FLOW
+  useEffect(() => {
+    const debugRequests = async () => {
+      console.log('🔍 DEBUG: Checking requests in database...');
+      
+      try {
+        // Check raw requests table
+        const { data: rawRequests, error: rawError } = await supabase
+          .from('requests')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (rawError) {
+          console.error('❌ Error fetching raw requests:', rawError);
+        } else {
+          console.log('✅ Raw requests in database:', rawRequests?.length || 0);
+          console.table(rawRequests);
+        }
+        
+        // Check requests with requesters
+        const { data: requestsWithRequesters, error: requestersError } = await supabase
+          .from('requests')
+          .select(`
+            *,
+            requesters (
+              id,
+              name,
+              photo,
+              message,
+              created_at
+            )
+          `)
+          .order('created_at', { ascending: false });
+        
+        if (requestersError) {
+          console.error('❌ Error fetching requests with requesters:', requestersError);
+        } else {
+          console.log('✅ Requests with requesters:', requestsWithRequesters?.length || 0);
+          console.table(requestsWithRequesters);
+        }
+        
+        // Check current state
+        console.log('📊 Current App State:');
+        console.log('- requests state length:', requests.length);
+        console.log('- requests state data:', requests);
+        
+      } catch (error) {
+        console.error('❌ Debug error:', error);
+      }
+    };
+    
+    // Run debug after 3 seconds to let other fetches complete
+    setTimeout(debugRequests, 3000);
+  }, [requests]);
 
   // Global error handler for unhandled promise rejections
   useEffect(() => {
