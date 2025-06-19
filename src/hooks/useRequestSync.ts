@@ -50,13 +50,31 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       setIsLoading(true);
       setError(null);
 
-      // Use the optimized database function for better performance
+      // FIXED: Use direct query instead of missing function
+      console.log('🔄 Fetching requests with requesters...');
       const { data: requestsData, error: requestsError } = await supabase
-        .rpc('get_requests_with_votes');
+        .from('requests')
+        .select(`
+          *,
+          requesters (
+            id,
+            name,
+            photo,
+            message,
+            created_at
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      console.log('🔍 DEBUG - Raw Supabase Response:');
+      console.log('- Error:', requestsError);
+      console.log('- Data length:', requestsData?.length || 0);
+      console.log('- First request raw:', requestsData?.[0]);
 
       if (requestsError) throw requestsError;
 
       if (!requestsData) {
+        console.log('❌ No requests found - requestsData is null/undefined');
         const emptyResult: SongRequest[] = [];
         if (mountedRef.current) {
           onUpdate(emptyResult);
@@ -65,56 +83,50 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
         return;
       }
 
-      // Fetch requesters separately for active requests only
-      const requestIds = requestsData.map(r => r.id);
-      let requestersData: any[] = [];
-      
-      if (requestIds.length > 0) {
-        const { data: reqData, error: reqError } = await supabase
-          .from('requesters')
-          .select('id, request_id, name, photo, message, created_at')
-          .in('request_id', requestIds)
-          .order('created_at', { ascending: false });
-
-        if (reqError) throw reqError;
-        requestersData = reqData || [];
-      }
-
-      // Group requesters by request_id for efficient lookup
-      const requestersByRequestId = requestersData.reduce((acc, requester) => {
-        if (!acc[requester.request_id]) {
-          acc[requester.request_id] = [];
-        }
-        acc[requester.request_id].push({
-          name: requester.name,
-          photo: requester.photo,
-          message: requester.message,
-          timestamp: new Date(requester.created_at)
-        });
-        return acc;
-      }, {} as Record<string, any[]>);
-
       // Transform to SongRequest format
-      const transformedRequests: SongRequest[] = requestsData.map(request => ({
-        id: request.id,
-        title: request.title,
-        artist: request.artist || '',
-        requesters: requestersByRequestId[request.id] || [],
-        votes: request.votes || 0,
-        status: request.status as any,
-        isLocked: request.is_locked || false,
-        isPlayed: request.is_played || false,
-        createdAt: new Date(request.created_at)
-      }));
+      console.log('🔄 Starting to format requests...');
+      const transformedRequests: SongRequest[] = requestsData.map(request => {
+        console.log(`📝 Formatting request: ${request.title}`);
+        console.log(`   - ID: ${request.id}`);
+        console.log(`   - is_played: ${request.is_played}`);
+        console.log(`   - votes: ${request.votes}`);
+        console.log(`   - requesters count: ${request.requesters?.length || 0}`);
+
+        return {
+          id: request.id,
+          title: request.title,
+          artist: request.artist || '',
+          requesters: (request.requesters || []).map((requester: any) => ({
+            name: requester.name,
+            photo: requester.photo || '',
+            message: requester.message || '',
+            timestamp: new Date(requester.created_at)
+          })),
+          votes: request.votes || 0,
+          status: request.status as any,
+          isLocked: request.is_locked || false,
+          isPlayed: request.is_played || false,
+          createdAt: new Date(request.created_at)
+        };
+      });
+
+      console.log('✅ Formatted requests:', transformedRequests.length);
+      console.log('📊 Formatted data preview:', transformedRequests.map(r => ({
+        id: r.id,
+        title: r.title,
+        isPlayed: r.isPlayed,
+        requesters: r.requesters.length
+      })));
 
       if (mountedRef.current) {
+        console.log('🚀 About to call onUpdate with:', transformedRequests.length, 'requests');
         onUpdate(transformedRequests);
         cacheRef.current = { data: transformedRequests, timestamp: Date.now() };
         lastUpdateRef.current = Date.now();
         setRetryCount(0);
       }
     } catch (error) {
-      console.error('Error fetching requests:', error);
+      console.error('❌ Error fetching requests:', error);
       if (mountedRef.current) {
         setError(error as Error);
         
