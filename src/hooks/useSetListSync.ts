@@ -94,14 +94,6 @@ export function useSetListSync(onUpdate: (setLists: SetList[]) => void) {
               notes,
               "albumArtUrl"
             )
-              id,
-              title,
-              artist,
-              genre,
-              key,
-              notes,
-              "albumArtUrl"
-            )
           )
         `)
         .order('created_at', { ascending: false });
