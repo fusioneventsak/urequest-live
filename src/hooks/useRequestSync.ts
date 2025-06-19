@@ -1,29 +1,45 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { supabase } from '../utils/supabase';
-import { cacheService } from '../utils/cache';
-import { RealtimeManager } from '../utils/realtimeManager';
 import type { SongRequest } from '../types';
 
-const REQUESTS_CACHE_KEY = 'requests:all';
+const CACHE_DURATION = 30000; // 30 seconds
 const MAX_RETRY_ATTEMPTS = 3;
-const RETRY_DELAY = 1000; // 1 second base delay
+const RETRY_DELAY = 1000;
+
+interface CachedData {
+  data: SongRequest[];
+  timestamp: number;
+}
 
 export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const mountedRef = useRef(true);
-  const requestsSubscriptionRef = useRef<string | null>(null);
-  const requestersSubscriptionRef = useRef<string | null>(null);
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const subscriptionRef = useRef<any>(null);
   const fetchInProgressRef = useRef<boolean>(false);
+  const cacheRef = useRef<CachedData | null>(null);
+  const lastUpdateRef = useRef<number>(0);
 
-  // Fetch requests with simple error handling
+  // Optimized fetch with caching and deduplication
   const fetchRequests = useCallback(async (bypassCache = false) => {
-    // Don't allow concurrent fetches
+    // Prevent concurrent fetches
     if (fetchInProgressRef.current) {
-      console.log('Fetch already in progress, skipping');
       return;
+    }
+    
+    // Check cache first
+    if (!bypassCache && cacheRef.current) {
+      const { data, timestamp } = cacheRef.current;
+      const age = Date.now() - timestamp;
+      
+      if (age < CACHE_DURATION && data.length > 0) {
+        if (mountedRef.current) {
+          onUpdate(data);
+          setIsLoading(false);
+        }
+        return;
+      }
     }
     
     fetchInProgressRef.current = true;
@@ -34,101 +50,80 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
       setIsLoading(true);
       setError(null);
 
-      // Check cache first unless bypassing
-      if (!bypassCache) {
-        const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
-        if (cachedRequests?.length > 0) {
-          console.log('Using cached requests');
-          if (mountedRef.current) {
-            onUpdate(cachedRequests);
-            setIsLoading(false);
-          }
-          return;
-        }
-      }
-
-      // Fetch requests with requesters
-      console.log('🔄 Fetching requests with requesters...');
+      // Use the optimized database function for better performance
       const { data: requestsData, error: requestsError } = await supabase
-        .from('requests')
-        .select(`
-          *,
-          requesters (
-            id,
-            name,
-            photo,
-            message,
-            created_at
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .rpc('get_requests_with_votes');
 
       if (requestsError) throw requestsError;
 
       if (!requestsData) {
-        console.log('No requests found');
+        const emptyResult: SongRequest[] = [];
         if (mountedRef.current) {
-          onUpdate([]);
+          onUpdate(emptyResult);
+          cacheRef.current = { data: emptyResult, timestamp: Date.now() };
         }
         return;
       }
 
-      if (mountedRef.current) {
-        console.log('✅ Fetched requests:', requestsData.length);
-        const formattedRequests = requestsData.map(request => ({
-          id: request.id,
-          title: request.title,
-          artist: request.artist || '',
-          votes: request.votes || 0,
-          status: request.status || 'pending',
-          isLocked: request.is_locked || false,
-          isPlayed: request.is_played || false,
-          createdAt: new Date(request.created_at).toISOString(),
-          requesters: (request.requesters || []).map(requester => ({
-            id: requester.id,
-            name: requester.name,
-            photo: requester.photo,
-            message: requester.message || '',
-            timestamp: new Date(requester.created_at).toISOString()
-          }))
-        }));
+      // Fetch requesters separately for active requests only
+      const requestIds = requestsData.map(r => r.id);
+      let requestersData: any[] = [];
+      
+      if (requestIds.length > 0) {
+        const { data: reqData, error: reqError } = await supabase
+          .from('requesters')
+          .select('id, request_id, name, photo, message, created_at')
+          .in('request_id', requestIds)
+          .order('created_at', { ascending: false });
 
-        // Clear cache and update with fresh data
-        if (bypassCache) {
-          cacheService.del(REQUESTS_CACHE_KEY);
+        if (reqError) throw reqError;
+        requestersData = reqData || [];
+      }
+
+      // Group requesters by request_id for efficient lookup
+      const requestersByRequestId = requestersData.reduce((acc, requester) => {
+        if (!acc[requester.request_id]) {
+          acc[requester.request_id] = [];
         }
-        
-        cacheService.setRequests(REQUESTS_CACHE_KEY, formattedRequests);
-        onUpdate(formattedRequests);
-        setRetryCount(0); // Reset retry count on success
+        acc[requester.request_id].push({
+          name: requester.name,
+          photo: requester.photo,
+          message: requester.message,
+          timestamp: new Date(requester.created_at)
+        });
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Transform to SongRequest format
+      const transformedRequests: SongRequest[] = requestsData.map(request => ({
+        id: request.id,
+        title: request.title,
+        artist: request.artist || '',
+        requesters: requestersByRequestId[request.id] || [],
+        votes: request.votes || 0,
+        status: request.status as any,
+        isLocked: request.is_locked || false,
+        isPlayed: request.is_played || false,
+        createdAt: new Date(request.created_at)
+      }));
+
+      if (mountedRef.current) {
+        onUpdate(transformedRequests);
+        cacheRef.current = { data: transformedRequests, timestamp: Date.now() };
+        lastUpdateRef.current = Date.now();
+        setRetryCount(0);
       }
     } catch (error) {
-      console.error('❌ Error fetching requests:', error);
-      
+      console.error('Error fetching requests:', error);
       if (mountedRef.current) {
-        setError(error instanceof Error ? error : new Error(String(error)));
+        setError(error as Error);
         
-        // Use cached data if available
-        const cachedRequests = cacheService.get<SongRequest[]>(REQUESTS_CACHE_KEY);
-        if (cachedRequests) {
-          console.warn('Using stale cache due to fetch error');
-          onUpdate(cachedRequests);
-        }
-        
-        // Retry with exponential backoff
+        // Retry logic with exponential backoff
         if (retryCount < MAX_RETRY_ATTEMPTS) {
           const delay = RETRY_DELAY * Math.pow(2, retryCount);
-          console.log(`Retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
-          
-          if (fetchTimeoutRef.current) {
-            clearTimeout(fetchTimeoutRef.current);
-          }
-          
-          fetchTimeoutRef.current = setTimeout(() => {
-            if (mountedRef.current) {
-              setRetryCount(prev => prev + 1);
-              fetchRequests(true);
-            }
+          setTimeout(() => {
+            setRetryCount(prev => prev + 1);
+            fetchRequests(true);
           }, delay);
         }
       }
@@ -140,124 +135,127 @@ export function useRequestSync(onUpdate: (requests: SongRequest[]) => void) {
     }
   }, [onUpdate, retryCount]);
 
-  // Setup realtime subscriptions
+  // Setup real-time subscription with debouncing
   useEffect(() => {
-    mountedRef.current = true;
+    let debounceTimer: NodeJS.Timeout | null = null;
     
-    // Initialize RealtimeManager
-    RealtimeManager.init();
-    
-    // Setup subscriptions
-    const setupSubscriptions = () => {
-      try {
-        // Subscribe to requests table
-        const requestsSub = RealtimeManager.createSubscription(
-          'requests',
-          (payload) => {
-            console.log('🔔 Requests changed:', payload.eventType);
-            fetchRequests(true);
-          }
-        );
-        
-        // Subscribe to requesters table
-        const requestersSub = RealtimeManager.createSubscription(
-          'requesters',
-          (payload) => {
-            console.log('🔔 Requesters changed:', payload.eventType);
-            fetchRequests(true);
-          }
-        );
-        
-        requestsSubscriptionRef.current = requestsSub;
-        requestersSubscriptionRef.current = requestersSub;
-      } catch (error) {
-        console.error('Error setting up realtime subscriptions:', error);
+    const setupSubscription = () => {
+      // Clean up existing subscription
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
       }
+
+      // Subscribe to requests changes
+      subscriptionRef.current = supabase
+        .channel('requests_channel')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'requests'
+          },
+          (payload) => {
+            console.log('📡 Request change detected:', payload.eventType);
+            
+            // Debounce rapid changes
+            if (debounceTimer) {
+              clearTimeout(debounceTimer);
+            }
+            
+            debounceTimer = setTimeout(() => {
+              const timeSinceLastUpdate = Date.now() - lastUpdateRef.current;
+              
+              // Only refetch if enough time has passed or it's a critical change
+              if (timeSinceLastUpdate > 2000 || payload.eventType === 'DELETE') {
+                fetchRequests(true);
+              }
+            }, 500);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'requesters'
+          },
+          (payload) => {
+            console.log('📡 Requester change detected:', payload.eventType);
+            
+            if (debounceTimer) {
+              clearTimeout(debounceTimer);
+            }
+            
+            debounceTimer = setTimeout(() => {
+              fetchRequests(true);
+            }, 300);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'user_votes'
+          },
+          (payload) => {
+            console.log('📡 Vote change detected:', payload.eventType);
+            
+            if (debounceTimer) {
+              clearTimeout(debounceTimer);
+            }
+            
+            debounceTimer = setTimeout(() => {
+              fetchRequests(true);
+            }, 200);
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Real-time subscription active');
+          }
+        });
     };
-    
-    // Initial fetch and subscription setup
-    fetchRequests();
-    setupSubscriptions();
-    
-    // REMOVED: Periodic polling interval setup
-    // No more setInterval for polling
-    
-    // Cleanup on unmount
+
+    setupSubscription();
+
     return () => {
-      mountedRef.current = false;
-      
-      // Clear any pending timeouts
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
       }
-      
-      // Remove subscriptions
-      if (requestsSubscriptionRef.current) {
-        RealtimeManager.removeSubscription(requestsSubscriptionRef.current);
-      }
-      
-      if (requestersSubscriptionRef.current) {
-        RealtimeManager.removeSubscription(requestersSubscriptionRef.current);
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
       }
     };
   }, [fetchRequests]);
 
-  // Function to manually reconnect
-  const reconnect = useCallback(() => {
-    console.log('Manual reconnection requested');
-    
-    // Remove existing subscriptions
-    if (requestsSubscriptionRef.current) {
-      RealtimeManager.removeSubscription(requestsSubscriptionRef.current);
-      requestsSubscriptionRef.current = null;
-    }
-    
-    if (requestersSubscriptionRef.current) {
-      RealtimeManager.removeSubscription(requestersSubscriptionRef.current);
-      requestersSubscriptionRef.current = null;
-    }
-    
-    // Reconnect realtime
-    RealtimeManager.reconnect();
-    
-    // Setup new subscriptions
-    const setupSubscriptions = () => {
-      try {
-        // Subscribe to requests table
-        const requestsSub = RealtimeManager.createSubscription(
-          'requests',
-          (payload) => {
-            console.log('🔔 Requests changed:', payload.eventType);
-            fetchRequests(true);
-          }
-        );
-        
-        // Subscribe to requesters table
-        const requestersSub = RealtimeManager.createSubscription(
-          'requesters',
-          (payload) => {
-            console.log('🔔 Requesters changed:', payload.eventType);
-            fetchRequests(true);
-          }
-        );
-        
-        requestsSubscriptionRef.current = requestsSub;
-        requestersSubscriptionRef.current = requestersSub;
-      } catch (error) {
-        console.error('Error setting up realtime subscriptions:', error);
+  // Initial fetch
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
       }
     };
-    
-    setupSubscriptions();
-    
-    // Fetch latest data
+  }, []);
+
+  // Manual refresh function
+  const refresh = useCallback(() => {
+    cacheRef.current = null;
     fetchRequests(true);
   }, [fetchRequests]);
 
   return {
     isLoading,
     error,
-    refetch: () => fetchRequests(true),
-    reconnect
+    refresh,
+    retryCount
   };
 }
