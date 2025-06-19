@@ -22,9 +22,21 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
   const [isLoading, setIsLoading] = useState(true);
   const [votingStates, setVotingStates] = useState<Set<string>>(new Set());
   const lastRequestsRef = useRef<SongRequest[]>([]);
+  const isMountedRef = useRef(true);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Memoize active requests with better performance
   const activeRequests = useMemo(() => {
+    if (!requests || requests.length === 0) {
+      return [];
+    }
+
     // Only recalculate if requests actually changed
     if (lastRequestsRef.current === requests) {
       return lastRequestsRef.current.filter(request => !request.isPlayed);
@@ -51,8 +63,11 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
     const handleScroll = () => {
       if (!ticking) {
         requestAnimationFrame(() => {
-          if (containerRef.current) {
-            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+          if (containerRef.current && isMountedRef.current) {
+            const maxScroll = Math.max(
+              document.documentElement.scrollHeight - window.innerHeight,
+              1
+            );
             const currentScroll = window.scrollY;
             const progress = Math.min((currentScroll / maxScroll) * 100, 100);
             setScrollProgress(progress);
@@ -67,29 +82,40 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Fetch user votes only once on mount
+  // Fetch user votes only once on mount - with better error handling
   useEffect(() => {
     let isMounted = true;
     
     const fetchUserVotes = async () => {
       if (!currentUserId) {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
         return;
       }
 
       try {
+        setIsLoading(true);
+        
         const { data: votes, error } = await supabase
           .from('user_votes')
           .select('request_id')
           .eq('user_id', currentUserId);
 
-        if (error) throw error;
+        if (error) {
+          // Handle common errors gracefully
+          if (error.message.includes('relation "user_votes" does not exist')) {
+            console.warn('user_votes table does not exist yet - votes will be tracked locally');
+            if (isMounted) setIsLoading(false);
+            return;
+          }
+          throw error;
+        }
 
         if (isMounted && votes) {
           setVotedRequests(new Set(votes.map(v => v.request_id)));
         }
       } catch (error) {
         console.error('Error fetching user votes:', error);
+        // Don't show error to user - just log it
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -104,7 +130,7 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
     };
   }, [currentUserId]);
 
-  // Optimized vote handler with better state management
+  // Fallback vote handler - uses existing onVote prop instead of database functions
   const handleVote = useCallback(async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -118,22 +144,19 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
     setVotedRequests(prev => new Set([...prev, id]));
 
     try {
-      // Use the atomic database function for better performance
-      const { data, error } = await supabase.rpc('add_vote', {
-        p_request_id: id,
-        p_user_id: currentUserId
-      });
+      // Use the existing onVote function passed from parent
+      const success = await onVote(id);
 
-      if (error) throw error;
-
-      if (data === false) {
-        // Already voted - revert UI state
-        setVotedRequests(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(id);
-          return newSet;
-        });
-        toast.error('You have already voted for this request');
+      if (!success) {
+        // Revert if vote failed
+        if (isMountedRef.current) {
+          setVotedRequests(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+          });
+          toast.error('You have already voted for this request');
+        }
       } else {
         toast.success('Vote recorded!');
       }
@@ -141,21 +164,29 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
       console.error('Error recording vote:', error);
       
       // Revert UI state on error
-      setVotedRequests(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
-      
-      toast.error('Failed to vote. Please try again.');
+      if (isMountedRef.current) {
+        setVotedRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
+        
+        const errorMessage = error instanceof Error ? error.message : 'Failed to vote';
+        toast.error(errorMessage.includes('already voted') ? 
+          'You have already voted for this request' : 
+          'Failed to vote. Please try again.'
+        );
+      }
     } finally {
-      setVotingStates(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
+      if (isMountedRef.current) {
+        setVotingStates(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
+      }
     }
-  }, [currentUserId, votedRequests, votingStates]);
+  }, [currentUserId, votedRequests, votingStates, onVote]);
 
   if (isLoading) {
     return (
@@ -166,7 +197,7 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
     );
   }
 
-  if (activeRequests.length === 0) {
+  if (!activeRequests || activeRequests.length === 0) {
     return (
       <div className="text-center py-12">
         <Music4 className="mx-auto h-12 w-12 text-gray-500 mb-4" />
@@ -197,7 +228,7 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
         const isVoting = votingStates.has(request.id);
         const requesters = Array.isArray(request.requesters) ? request.requesters : [];
         const mainRequester = requesters[0];
-        const additionalCount = requesters.length - 1;
+        const additionalCount = Math.max(0, requesters.length - 1);
 
         return (
           <div
@@ -241,6 +272,12 @@ export function UpvoteList({ requests, onVote, currentUserId }: UpvoteListProps)
                     className="w-12 h-12 rounded-full object-cover border-2"
                     style={{ borderColor: songBorderColor }}
                     loading="lazy"
+                    onError={(e) => {
+                      // Fallback to icon if image fails
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      target.parentElement?.classList.add('flex', 'items-center', 'justify-center');
+                    }}
                   />
                 ) : (
                   <div 
