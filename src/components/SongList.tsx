@@ -122,7 +122,6 @@ export function SongList({ songs, onSongSelect }: SongListProps) {
                     e.stopPropagation();
                     onSongSelect(song);
                   }}
-                  className="px-3 py-1.5 rounded-lg text-white transition-colors whitespace-nowrap text-sm font-extrabold tracking-wide uppercase"
                   className="px-3 py-1.5 rounded-lg text-white transition-all duration-200 whitespace-nowrap text-sm font-extrabold tracking-wide uppercase transform hover:scale-105 active:scale-95"
                   style={{
                     backgroundColor: accentColor,
