@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { Music4 } from 'lucide-react';
 import { useUiSettings } from '../../hooks/useUiSettings';
+import type { Song } from '../../types';
 
 interface AlbumArtDisplayProps {
   albumArtUrl?: string;
-  title: string;
+  title?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   imageClassName?: string;
   imageStyle?: React.CSSProperties;
+  song?: Song;
+  className?: string;
 }
 
 export function AlbumArtDisplay({ 
@@ -15,11 +18,17 @@ export function AlbumArtDisplay({
   title, 
   size = 'md', 
   imageClassName = '', 
-  imageStyle = {}
+  imageStyle = {},
+  song,
+  className = ''
 }: AlbumArtDisplayProps) {
   const [imageLoadError, setImageLoadError] = useState(false);
   const { settings } = useUiSettings();
   const accentColor = settings?.frontend_accent_color || '#ff00ff';
+
+  // If song is provided, use its properties
+  const displayUrl = song?.albumArtUrl || albumArtUrl;
+  const displayTitle = song?.title || title || 'Album Art';
 
   // Size configurations
   const sizeClasses = {
@@ -37,14 +46,15 @@ export function AlbumArtDisplay({
   };
 
   const handleImageError = () => {
+    console.log('Image failed to load:', displayUrl);
     setImageLoadError(true);
   };
 
   // Show fallback if no URL provided or image failed to load
-  if (!albumArtUrl || imageLoadError) {
+  if (!displayUrl || imageLoadError) {
     return (
       <div 
-        className={`${sizeClasses[size]} rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0`}
+        className={`${sizeClasses[size]} rounded-md flex items-center justify-center bg-neon-purple/20 flex-shrink-0 ${className}`}
         style={{
           boxShadow: `0 0 10px ${accentColor}30`,
           ...imageStyle
@@ -60,9 +70,9 @@ export function AlbumArtDisplay({
 
   return (
     <img
-      src={albumArtUrl}
-      alt={`${title} album art`}
-      className={`${sizeClasses[size]} object-cover rounded-md flex-shrink-0 ${imageClassName}`}
+      src={displayUrl}
+      alt={`${displayTitle} album art`}
+      className={`${sizeClasses[size]} object-cover rounded-md flex-shrink-0 ${imageClassName} ${className}`}
       style={imageStyle}
       onError={handleImageError}
     />

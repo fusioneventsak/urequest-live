@@ -67,7 +67,6 @@ export function Logo({ url, isAdmin = false, onClick, className = '' }: LogoProp
       />
 
       <style 
-        
         >{`
         @keyframes logoPulse {
           0%, 100% {
